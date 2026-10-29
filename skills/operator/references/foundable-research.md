@@ -1,6 +1,8 @@
-# Foundable 조사 요약 — 이 스킬의 설계 근거
+# 참고 서비스 분석 (Foundable) — 이 스킬의 설계 근거
 
-출처: "Foundable 조사 종합 정리" (2026-10-29, 내부 문서). 설계를 바꾸기 전에 읽는 파일이다.
+Foundable(foundable.com, Autono Labs)의 공개 자료(홈·문서·보도·서브프로세서 목록·런칭 글)를 2026-10-29 에
+정리한 것이다. 이 스킬은 그 운영 방식에서 착안한 **독립 구현**이며 해당 회사와 무관하다. 설계를 바꾸기 전에
+읽는 파일이다.
 
 ## 1. Foundable 이 뭔가
 
@@ -55,9 +57,6 @@ Ted 의 한 pass: 리서치 → 초안 → **검증 게이트** → **승인 대
 | 나중에 | Modal | AI 생성 코드 격리 실행이 필요할 때 |
 | 대체 | Turbopuffer → pgvector, Pierre → GitHub, Judgment Labs → Langfuse | |
 
-아지 프로젝트 적용 포인트: 장기 기억(대화 요약 → pgvector), 승인 큐(SNS 게시·메시지 발송에 "Needs your OK"),
-reasoning 라우팅(로컬 Qwen 으로 쉬운 응답, 복잡한 판단만 Claude).
-
 ## 5. 원래 플러그인 구상 (가칭 operator)
 
 ```
@@ -82,12 +81,3 @@ Foundable 과 다른 점(1인용이라 가능한 것): 돌아가는 건 run 을 
 | claude-ops | 57 스킬 + 21 에이전트, 통합 인박스, 매출, 자율 PR 머지 | "Claude Code 를 사업 운영체제로" |
 | Assistant-Labs/claude-plugin | 식어가는 리드 추적, 결정 필요한 것만 10초 선택지 | "승인은 당신이" 철학 |
 | agent-session-resume / claude-queue / fstack | 재개 체크포인트 / 툴 호출 승인 큐 / 휴먼 게이트 | 부품 |
-
-## 7. 포지션
-
-기능 개수로는 못 이긴다. 기존 플러그인은 "지시문 더미"이고 Foundable 이 인프라로 만든 "강제 장치"가 빠져 있다.
-그 빈자리 네 군데(승인 게이트·재개·검증 게이트·모델 라우팅)를 셸 스크립트와 JSON 수준으로 메운다.
-
-**"적게 하지만 절대 안 어기는 운영 플러그인."** 하는 건 적지만 밖으로 나가는 건 100% 내 손을 거치고, 끊겨도 처음부터 하지 않는다.
-
-안 되는 것: 넓이 경쟁, "AI 직원 8명" 같은 선점된 컨셉, Temporal/Modal 급 진짜 인프라.

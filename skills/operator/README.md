@@ -1,6 +1,6 @@
 # operator
 
-"적게 하지만 절대 안 어기는" 운영 스킬. Foundable 의 AI 직원 Ted 가 인프라(Temporal·Modal·승인 큐)로
+"적게 하지만 절대 안 어기는" 운영 스킬. "AI 직원" 서비스가 인프라(Temporal·Modal·승인 큐)로
 강제하던 네 가지 — **승인 게이트 · 재개 가능한 pass · 검증 게이트 · 모델 라우팅** — 를 python3 스크립트와
 JSON 파일 수준으로 옮겼다. [Agent Skills 표준](https://agentskills.io/specification) 형식이라
 Claude Code, Codex CLI, Cursor, Gemini CLI 등 이 표준을 읽는 도구에서 **같은 폴더 그대로** 쓴다.
@@ -9,7 +9,7 @@ Claude Code, Codex CLI, Cursor, Gemini CLI 등 이 표준을 읽는 도구에서
 operator/
 ├── SKILL.md                 ← 에이전트가 읽는 본문 (모드: plan / run / approve / status)
 ├── scripts/op, op.py        ← 단일 CLI. 표준 라이브러리만. (state.json · pending/ · verify · guard · llm)
-├── references/              ← 설계 근거(Foundable 조사), pass 흐름, 검증·가드 규칙, 라우팅
+├── references/              ← 설계 근거(참고 서비스 분석), pass 흐름, 검증·가드 규칙, 라우팅
 ├── assets/templates/        ← business.md, post/email/research 초안 템플릿
 ├── assets/hooks/            ← 도구별 훅 설정 + 훅 없는 도구용 AGENTS.md 스니펫
 ├── agents/openai.yaml       ← Codex 가 표시하는 메타데이터
@@ -62,7 +62,9 @@ op pending approve 0001                   # 또는 reject 0001 --reason "..."
 
 `op help` 로 전체 명령.
 
-## Foundable 과 다른 점 (1인용이라 가능한 것)
+## 원형 서비스와 다른 점 (1인용이라 가능한 것)
+
+이 스킬은 Foundable 의 공개된 운영 방식에서 착안한 독립 구현이며, 해당 회사와 무관하다.
 
 - 돌아가는 건 사용자가 run 을 시킬 때뿐. 밤새 돌리려면 각 도구의 예약 실행으로 하루 한 번.
 - 승인 UI 는 마크다운 파일 + 터미널 명령.

@@ -1,6 +1,6 @@
 # 모델 라우팅
 
-Foundable 은 TypeSafe AI 로 답변마다 reasoning 양을 정하고, 코드·자율 실행은 Claude, 일반 대화·임베딩은
+참고 서비스(Foundable)는 TypeSafe AI 로 답변마다 reasoning 양을 정하고, 코드·자율 실행은 Claude, 일반 대화·임베딩은
 OpenAI 로 나눴다. 1인 개발자에게 같은 효과를 내는 가장 싼 방법은 **역할로 자른다**:
 
 | 역할 | 어디서 | 이유 |

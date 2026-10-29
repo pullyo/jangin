@@ -1,12 +1,11 @@
 ---
 name: operator
 description: >-
-  1인 개발자의 사업·프로젝트를 AI 직원처럼 "굴려주는" 운영 루프. Foundable(Ted)의
-  Build→Grow(Run)→Earn 방식에서 인프라로 강제하던 네 가지(승인 게이트, 재개 가능한 pass,
-  검증 게이트, 모델 라우팅)를 셸 스크립트와 JSON 파일로 옮긴 것이다. 사용자가 사업/프로젝트
-  운영 자동화, 소셜 포스트·이메일·아웃리치 초안과 발송, 시장·경쟁사 리서치 루틴, 사이트
-  배포, "AI 직원", "Ted처럼", "운영 루프", "pass", "승인 큐", "Needs your OK", "재개",
-  "Foundable", "operator" 를 언급하거나, 에이전트가 밖으로 나가는 행동(발송·게시·배포·
+  1인 개발자의 사업·프로젝트를 AI 직원처럼 "굴려주는" 운영 루프. "AI 직원" 서비스가
+  인프라로 강제하는 네 가지(승인 게이트, 재개 가능한 pass, 검증 게이트, 모델 라우팅)를
+  셸 스크립트와 JSON 파일로 옮긴 것이다. 사용자가 사업/프로젝트 운영 자동화, 소셜 포스트·
+  이메일·아웃리치 초안과 발송, 시장·경쟁사 리서치 루틴, 사이트 배포, "AI 직원", "운영 루프",
+  "pass", "승인 큐", "Needs your OK", "재개", "operator" 를 언급하거나, 에이전트가 밖으로 나가는 행동(발송·게시·배포·
   결제·삭제)을 해야 하는 상황이면 반드시 이 스킬을 써라. 명시적으로 "스킬"이라 말하지 않아도,
   "매일 돌려줘", "밤새 돌려줘", "초안 만들어서 올려놔", "승인 대기 뭐 있어" 같은 말도 해당한다.
   Claude Code 외에 Codex CLI, Cursor, Gemini CLI 등 Agent Skills 표준을 지원하는 모든 도구에서 동작.
@@ -16,15 +15,15 @@ compatibility: >-
   물리적 차단은 PreToolUse 류 훅을 지원하는 도구(Claude Code, Codex, Cursor, Gemini CLI)에서만 100%.
 metadata:
   author: plant313
-  version: "0.1.0"
-  source: Foundable 조사 종합 정리 (2026-10-29)
+  version: "0.2.0"
 ---
 
 # operator — 적게 하지만 절대 안 어기는 운영 루프
 
-Foundable 은 "만들어준다"가 아니라 "굴려준다"로 성립하는 서비스다. 모델은 빌려 쓰므로 차별점이
+"AI 직원" 서비스는 "만들어준다"가 아니라 "굴려준다"로 성립한다. 모델은 빌려 쓰므로 차별점이
 아니고, 진짜 차별점은 LLM 을 둘러싼 **실행 환경**이다. 이 스킬은 그 환경을 1인 개발자가
-감당할 수 있는 크기로 줄인 것이다. 하는 일은 적지만 아래 네 가지는 절대 어기지 않는다.
+감당할 수 있는 크기로 줄인 것이다 (Foundable 의 공개된 운영 방식에서 착안한 독립 구현이며,
+해당 회사와 무관하다. 분석은 [references/foundable-research.md](references/foundable-research.md)). 하는 일은 적지만 아래 네 가지는 절대 어기지 않는다.
 
 | 강제 장치 | 기존 플러그인 ("지시문 더미") | 이 스킬 | 구현 |
 |---|---|---|---|
@@ -68,7 +67,7 @@ op init              # 프로젝트 루트에서 한 번. .operator/{pending,app
 
 ### run — pass 한 번 돌리기
 
-Ted 는 "pass" 단위로 돌아간다. 한 pass = 리서치 → 초안 → 검증 → 승인 대기. 모든 단계는 체크포인트다.
+AI 직원은 "pass" 단위로 돌아간다. 한 pass = 리서치 → 초안 → 검증 → 승인 대기. 모든 단계는 체크포인트다.
 
 ```bash
 op pass start --goal "이번 주 런칭 포스트 3개" --max-steps 6   # 진행 중인 pass 가 있으면 거부됨 → 이어서
@@ -91,7 +90,7 @@ op pass done report  ;  op pass end                             # passes/<id>.md
 - **report**: `op pass end` 가 만드는 요약에 더해, 사용자에게 **승인 대기 목록**과 다음 pass 제안을 3줄로.
 
 규칙:
-- `--max-steps` 는 Foundable 의 크레딧 상한에 해당한다. 상한에 닿으면 `op pass end` 하고 멈춘다. 더 하고 싶으면 사용자가 새 pass 를 시킨다.
+- `--max-steps` 는 원형 서비스의 크레딧 상한에 해당한다. 상한에 닿으면 `op pass end` 하고 멈춘다. 더 하고 싶으면 사용자가 새 pass 를 시킨다.
 - `op pass done` 은 `--output` 경로가 실제로 존재해야 통과한다. 산출물 없이 "했다"고 적을 수 없다.
 - 중간에 실패하면 `op pass fail <step> --reason "..."`. 다음에 같은 단계부터 재개된다. 처음부터 다시 하지 않는다.
 - 세션이 끊겨도 `state.json` 이 남는다. 새 세션은 `op status` → `op pass next` 로 **그 지점에서** 이어 간다.
@@ -135,7 +134,7 @@ op send 0004 --shell -- "npm run build && wrangler deploy"
 막혔을 때 올바른 행동은 하나다: 그 결과물을 파일로 만들고 `op pending add <file> --type ... --action "<막힌 명령>"`.
 우회하려 하지 마라 (다른 셸로 감싸기, 스크립트에 숨기기, 설정 바꾸기 모두 금지). 가드 로그(`.operator/guard.log`)에 남는다.
 
-도메인 구매와 결제는 승인 큐로도 올리지 않는다. Foundable 도 AI 에게 아예 못 하게 했다. 사용자에게 직접 하라고 안내.
+도메인 구매와 결제는 승인 큐로도 올리지 않는다. 원형 서비스도 AI 에게 아예 못 하게 했다. 사용자에게 직접 하라고 안내.
 
 ## 3. 검증 게이트 — 산출물 타입별 규칙
 
@@ -189,5 +188,5 @@ op llm --role draft "..."    # → ROUTE=self, exit 3. 네가 직접 써라.
 
 ## 6. 이 설계의 근거
 
-왜 이렇게 만들었는지, Foundable 이 실제로 어떻게 돌아가는지, 유사 프로젝트와의 차이는
+왜 이렇게 만들었는지, 참고한 서비스가 실제로 어떻게 돌아가는지, 유사 프로젝트와의 차이는
 [references/foundable-research.md](references/foundable-research.md) 에 있다. 설계를 바꾸고 싶을 때 먼저 읽어라.

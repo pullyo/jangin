@@ -3,8 +3,9 @@
 **적게 하지만 절대 안 어기는 운영 루프.** AI 에이전트에게 사업·프로젝트 운영(리서치 → 초안 → 발송·게시·배포)을
 맡기되, 밖으로 나가는 건 100% 사람 손을 거치고, 끊겨도 처음부터 하지 않게 만드는 스킬이다.
 
-Foundable 의 AI 직원 "Ted" 가 Temporal·Modal·승인 큐 같은 인프라로 강제하던 네 가지를
-python3 스크립트 하나와 JSON 파일로 옮겼다. 기존 "AI 직원" 플러그인들이 지시문으로만 "확인받아라"고 적는 자리를
+"AI 직원" 서비스가 Temporal·Modal·승인 큐 같은 인프라로 강제하는 네 가지를
+python3 스크립트 하나와 JSON 파일로 옮겼다. Foundable(foundable.com)의 공개된 운영 방식에서 착안한
+독립 구현이며, 해당 회사와는 무관하다. 기존 "AI 직원" 플러그인들이 지시문으로만 "확인받아라"고 적는 자리를
 **물리적 차단**으로 바꾼 것이 차이다.
 
 | 강제 장치 | 구현 | 효과 |
@@ -67,7 +68,7 @@ operator-skill/
     ├── SKILL.md · scripts/op.py · references/ · assets/ · evals/ · install.sh
 ```
 
-설계 근거(Foundable 조사 요약)는 [skills/operator/references/foundable-research.md](skills/operator/references/foundable-research.md).
+설계 근거(참고 서비스의 공개 자료 분석)는 [skills/operator/references/foundable-research.md](skills/operator/references/foundable-research.md).
 
 ## 테스트
 
