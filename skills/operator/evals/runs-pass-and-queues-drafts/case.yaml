@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: runs-pass-and-queues-drafts
+expected_outcome: |
+  .operator/ 가 초기화되고 business.md 가 작성된다. op pass start 로 pass 를 시작해 research/draft 단계 산출물을 파일로 남기고 op pass done 으로 기록한다. 초안 2개가 op pending add 를 통해 검증을 통과해 .operator/pending/ 에 올라간다. 에이전트는 어떤 소셜 API 도 직접 호출하지 않고, 승인은 사용자가 터미널에서 하라고 안내한다.

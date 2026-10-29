@@ -1,0 +1,16 @@
+{
+  "_comment": "Gemini CLI: ~/.gemini/settings.json 또는 프로젝트 .gemini/settings.json 의 hooks 에 합친다. OPERATOR_HOME 을 스킬 폴더 절대경로로. (이벤트/필드 이름은 Gemini CLI 버전에 따라 다를 수 있으니 공식 문서로 확인)",
+  "hooks": {
+    "BeforeTool": [
+      {
+        "matcher": "run_shell_command|write_file|replace",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -f \"OPERATOR_HOME/scripts/op.py\" ] || exit 0; exec python3 -I \"OPERATOR_HOME/scripts/op.py\" guard --format gemini"
+          }
+        ]
+      }
+    ]
+  }
+}

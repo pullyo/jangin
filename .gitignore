@@ -1,0 +1,7 @@
+.operator/
+*.skill
+__pycache__/
+*.pyc
+.DS_Store
+evals/results/
+skills/*/evals/results/

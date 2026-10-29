@@ -1,0 +1,11 @@
+<!-- 훅/스킬을 지원하지 않는 도구용. 프로젝트의 AGENTS.md (또는 CLAUDE.md, GEMINI.md, .cursorrules) 에 붙여 넣는다. -->
+## operator 운영 규칙
+
+이 프로젝트는 operator 스킬로 운영한다. 스킬 본문: `.agents/skills/operator/SKILL.md` (먼저 읽어라).
+CLI: `.agents/skills/operator/scripts/op`.
+
+- 작업 전 `op status`. 진행 중인 pass 가 있으면 그 단계부터 이어서 한다.
+- 발송·게시·배포·결제·삭제 명령은 직접 실행하지 않는다. 결과물을 파일로 만들고 `op pending add` 로 승인 큐에 올린다.
+  실행 전에 `op guard check "<명령>"` 으로 막히는 명령인지 확인한다. DENY 면 큐로.
+- `op pending approve/reject` 는 사람만 실행한다. `.operator/pending|approved|sent|rejected/` 는 직접 편집하지 않는다.
+- 승인된 티켓만 `op send <id> -- <명령>` 으로 보낸다.

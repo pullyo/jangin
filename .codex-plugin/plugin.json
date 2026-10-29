@@ -1,0 +1,14 @@
+{
+  "name": "operator",
+  "description": "적게 하지만 절대 안 어기는 운영 루프. 승인 게이트, 재개 가능한 pass, 검증 게이트, 모델 라우팅.",
+  "license": "MIT",
+  "keywords": ["operator", "approval-gate", "human-in-the-loop", "agent-skills"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Operator",
+    "shortDescription": "밖으로 나가는 건 100% 승인 큐를 거치고, 끊겨도 처음부터 하지 않는 운영 루프",
+    "developerName": "pullyo",
+    "category": "Developer Tools"
+  },
+  "version": "0.1.0"
+}

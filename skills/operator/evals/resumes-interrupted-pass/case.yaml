@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: resumes-interrupted-pass
+expected_outcome: |
+  에이전트는 먼저 op status 를 실행한다. 진행 중인 pass 가 draft 단계에서 멈춰 있음을 발견하면 처음부터 다시 하지 않고, 사용자에게 이어서 끝낼지 op pass end 로 닫을지 묻거나 이어서 마무리한 뒤에 새 리서치 pass 를 시작한다. 지난 research 단계 산출물을 다시 만들지 않는다.
+context:
+  scaffold_script: place-files.sh

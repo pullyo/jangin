@@ -1,0 +1,16 @@
+{
+  "_comment": "Codex CLI: 프로젝트 .codex/hooks.json 또는 ~/.codex/hooks.json. 형식은 Claude Code 와 같다. OPERATOR_HOME 을 스킬 폴더 절대경로로.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "apply_patch|Bash|shell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -f \"OPERATOR_HOME/scripts/op.py\" ] || exit 0; exec python3 -I \"OPERATOR_HOME/scripts/op.py\" guard --format codex"
+          }
+        ]
+      }
+    ]
+  }
+}
