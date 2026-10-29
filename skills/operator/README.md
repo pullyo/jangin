@@ -57,7 +57,7 @@ op init                                   # 프로젝트 루트에서 한 번
 op pending list                           # 승인 대기 보기
 op pending show 0001
 op pending approve 0001                   # 또는 reject 0001 --reason "..."
-# 에이전트: "0001 보내" → op send 0001 -- <명령>  (승인된 티켓만 통과)
+# 에이전트: "0001 보내" → op send 0001  (티켓에 승인된 action 만 실행)
 ```
 
 `op help` 로 전체 명령.

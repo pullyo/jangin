@@ -66,7 +66,7 @@ $ op pass end
 사용자: 0001 보내
 
 에이전트:
-$ op send 0001 -- curl -X POST https://api.x.com/2/tweets -H "Authorization: Bearer $X_TOKEN" -d @.operator/approved/0001-post-....md
+$ op send 0001          # 티켓에 승인된 action(curl -X POST https://api.x.com/2/tweets …)만 실행된다
   exit 0 → sent
 ```
 

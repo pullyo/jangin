@@ -51,8 +51,8 @@ op init                      # .operator/ 생성. 이 폴더가 있는 프로젝
 # 에이전트에게: "operator 로 이 아이디어를 plan 해 줘"  → .operator/business.md
 # 에이전트에게: "pass 한 번 돌려"                       → 리서치 → 초안 → 검증 → 승인 대기
 op pending list              # 사람: 승인 대기 확인
-op pending approve 0001      # 사람: 승인 (에이전트는 이 명령을 실행할 수 없다)
-# 에이전트에게: "0001 보내"                              → op send 0001 -- <명령>  (승인된 티켓만 통과)
+op pending approve 0001      # 사람: 승인, 대화형 터미널에서만 (에이전트는 실행할 수 없다)
+# 에이전트에게: "0001 보내"                              → op send 0001  (티켓에 승인된 action 만 실행)
 ```
 
 `op` 는 `skills/operator/scripts/op` 다. PATH 에 넣거나 전체 경로로 쓴다.

@@ -15,7 +15,7 @@ compatibility: >-
   물리적 차단은 PreToolUse 류 훅을 지원하는 도구(Claude Code, Codex, Cursor, Gemini CLI)에서만 100%.
 metadata:
   author: plant313
-  version: "0.2.0"
+  version: "0.3.0"
 ---
 
 # operator — 적게 하지만 절대 안 어기는 운영 루프
@@ -86,7 +86,8 @@ op pass done report  ;  op pass end                             # passes/<id>.md
 - **draft**: 포스트·이메일 초안을 `.operator/drafts/` 에 한 파일씩. 형식은 아래 §4. business.md 의 톤·CTA·금지어를 따른다.
 - **queue**: 초안마다 `op pending add`. 검증을 통과한 것만 올라간다. 실패하면 **초안을 고쳐라**. 규칙을 완화하려고
   config.json 을 건드리지 마라 (그건 사용자 결정). 예외는 비어 있는 값을 채우는 것뿐이다 (예: `verify.site.command`).
-  실제로 보낼 명령을 알면 `--action` 으로 같이 적어 둬라. 승인 후 그대로 실행된다.
+  실제로 보낼 명령은 `--action` 으로 반드시 적어 둬라. 사람은 그 명령을 보고 승인하고, 승인 뒤에는 **그 명령만** 실행된다.
+  action 이 없는 티켓은 사람이 approve 할 때 `--action` 으로 명령을 정해 줘야 보낼 수 있다.
 - **report**: `op pass end` 가 만드는 요약에 더해, 사용자에게 **승인 대기 목록**과 다음 pass 제안을 3줄로.
 
 규칙:
@@ -99,8 +100,9 @@ op pass done report  ;  op pass end                             # passes/<id>.md
 
 ### approve — 승인은 사람이
 
-너는 승인하지 못한다. 훅이 `op pending approve/reject` 를 막고, `.operator/pending/` 아래 파일 편집도 막는다.
-이건 버그가 아니라 설계다 ("승인은 당신이").
+너는 승인하지 못한다. 훅이 `op pending approve/reject` 를 막고, 큐 폴더(`.operator/pending|approved|sent|rejected/`)를
+도구로 편집하는 것도, 셸로 옮기거나 덮어쓰는 것(`mv`, `cp`, `>`, `sed -i`, 파이썬 한 줄)도 막는다. approve 명령 자체도
+대화형 터미널에서만 동작하므로 네 셸 도구로는 실행되지 않는다. 이건 버그가 아니라 설계다 ("승인은 당신이").
 
 ```bash
 op pending list              # 대기 목록
@@ -110,15 +112,17 @@ op pending show 0003         # 내용
 사용자가 "승인해 줘"라고 하면 **네가 approve 명령을 치지 말고**, 사용자가 자기 터미널에서 실행할 명령을 보여줘라:
 
 ```
-op pending approve 0003        # 또는  op pending reject 0003 --reason "톤이 딱딱함"
+op pending approve 0003                                   # 티켓의 action 그대로 승인
+op pending approve 0004 --action "npm run build && wrangler deploy"   # action 이 없거나 바꿀 때
+op pending reject 0003 --reason "톤이 딱딱함"
 ```
 
-승인된 티켓은 `op send <id> -- <명령>` 으로 실제 발송·게시·배포한다. 이때만 가드가 통과시킨다.
-명령이 실패하면 티켓은 approved 에 남고, 성공하면 sent/ 로 이동한다. 재시도 가능.
+승인된 티켓은 `op send <id>` 로 실제 발송·게시·배포한다. 실행되는 것은 티켓에 승인된 action 뿐이다.
+`op send <id> -- <명령>` 처럼 명령을 같이 주면 action 과 같을 때만 실행되고, 다르면 거부된다. 다른 명령을
+보내고 싶으면 새 티켓을 올려 다시 승인받아라. 명령이 실패하면 티켓은 approved 에 남고, 성공하면 sent/ 로 이동한다.
 
 ```bash
-op send 0003 -- curl -X POST https://api.x.com/2/tweets -H "..." -d @.operator/approved/0003-post-....md
-op send 0004 --shell -- "npm run build && wrangler deploy"
+op send 0003
 ```
 
 ### status — 현황 보고
@@ -129,9 +133,10 @@ op send 0004 --shell -- "npm run build && wrangler deploy"
 
 가드는 다음을 막는다 (전체 목록과 추가 방법: [references/guard-rules.md](references/guard-rules.md)):
 메일 발송, 소셜 API POST, 외부 URL 로의 POST/PUT/DELETE, `vercel/netlify/wrangler/fly deploy`, `git push`,
-`npm publish`, `supabase db push`, Stripe 결제 생성, 도메인 구매, `rm -rf`, `git push --force`, `DROP TABLE`.
+`npm publish`, `supabase db push`, Stripe 결제 생성, 도메인 구매, 재귀 삭제(`rm -r`), `git push --force`, `DROP TABLE`.
 
 막혔을 때 올바른 행동은 하나다: 그 결과물을 파일로 만들고 `op pending add <file> --type ... --action "<막힌 명령>"`.
+큐 폴더의 파일을 셸로 옮기거나 고쳐서 상태를 바꾸는 것도 같은 규칙으로 막힌다.
 우회하려 하지 마라 (다른 셸로 감싸기, 스크립트에 숨기기, 설정 바꾸기 모두 금지). 가드 로그(`.operator/guard.log`)에 남는다.
 
 도메인 구매와 결제는 승인 큐로도 올리지 않는다. 원형 서비스도 AI 에게 아예 못 하게 했다. 사용자에게 직접 하라고 안내.

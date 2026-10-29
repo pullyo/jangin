@@ -25,21 +25,27 @@
 | 게시 | `curl` → twitter/x/facebook/threads/linkedin/instagram API, `curl -X POST/PUT/DELETE/PATCH` 외부 URL (localhost 제외) |
 | 배포 | `vercel/netlify/wrangler/fly/railway/render deploy|publish|up`, `vercel --prod`, `supabase db push / functions deploy / secrets set`, `git push` (`git -C <폴더> push`, `git -c … push` 포함), `npm publish` |
 | 결제·도메인 | `stripe ... charges/payment_intents/... create/confirm/capture`, 레지스트라 `register/purchase/buy` |
-| 파괴 | `rm -r*/-f*` (`.operator/tmp` 제외), `git push --force`, `git branch -D`, `git reset --hard`, `DROP TABLE/DATABASE/SCHEMA`, `supabase projects delete` |
+| 파괴 | 재귀 삭제 `rm -r`/`--recursive` (`.operator/tmp` 아래는 제외; 단일 파일 `rm -f` 는 통과), `git push --force`, `git branch -D`, `git reset --hard`, `DROP TABLE/DATABASE/SCHEMA`, `supabase projects delete` |
 
 ## 사람 전용 명령 (`human_only_commands`)
 
 `op pending approve`, `op pending reject`, `op approve`, `op reject`. 에이전트 세션에선 훅이 막는다.
 사람은 훅이 없는 자기 터미널에서 실행한다. Claude 데스크톱 앱이라면 Terminal 패널.
+훅과 별개로 approve/reject 명령 자체가 **대화형 터미널(TTY)** 을 요구한다. 에이전트의 셸 도구에는 터미널이 없어
+스크립트를 복사해 돌려도 거부된다. 자동화에서 꼭 필요하면 사람이 `OPERATOR_ALLOW_NONINTERACTIVE_APPROVE=1` 을 직접 설정한다.
 
 ## 보호 경로 (`deny_paths`) — Write/Edit/apply_patch 대상
 
 `.operator/pending/`, `.operator/approved/`, `.operator/sent/`, `.operator/rejected/`, `.operator/guard.json`.
 큐는 `op pending add` 로만 들어가고, 상태 변경은 `op pending approve/reject` 와 `op send` 로만 일어난다.
 
+셸 명령도 같은 규칙이다. 명령이 큐 경로를 언급하면 읽기 전용 명령(`cat`, `ls`, `head`, `grep`, `find`, `diff`, `jq` 등)만
+통과하고, `mv`/`cp`/`>`/`sed -i`/파이썬 한 줄 같은 쓰기는 전부 막힌다. `.operator` 폴더 자체를 옮기거나 지우는 것도 막힌다.
+
 ## 통과 조건
 
-- `op send <id> -- ...` 이고 `<id>` 가 `approved/` 에 있을 때. (`op send` 자체도 다시 확인한다.)
+- `op send <id>` 이고 `<id>` 가 `approved/` 에 있을 때. `op send` 는 티켓에 승인된 `action` 만 실행하고, 명령을
+  같이 주면 action 과 같을 때만 받아들인다. action 안에 `op pending`/`op send` 가 들어 있으면 실행하지 않는다.
 - `.operator/guard.json` 의 `allow_commands` 에 맞을 때 (deny 보다 먼저 본다). 예: 내부 스테이징 배포를 늘 허용하고 싶을 때.
 
 ## 프로젝트별 추가 — `.operator/guard.json`

@@ -4,6 +4,7 @@ Run from the repository root:  python3 -m unittest discover -s tests
 Every case feeds the hook JSON through the real `op.py guard` process, the way Claude Code / Codex do.
 """
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -91,3 +92,66 @@ class GuardReachTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ApprovalQueueIntegrityTests(unittest.TestCase):
+    """The queue can only change through op itself, and op send runs only what a human approved."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix='op queue 한글 ')
+        self.project = Path(self.temp.name).resolve()
+        run(['init'], self.project)
+        (self.project / 'd.md').write_text('---\ntype: post\nchannel: x\naction: echo post-to-x\n---\n오늘 베타를 열었습니다. 지금 써보세요 https://example.com\n', encoding='utf-8')
+        (self.project / 'n.md').write_text('---\ntype: post\nchannel: x\n---\n액션 없는 초안입니다. 지금 써보세요 https://example.com\n', encoding='utf-8')
+        self.assertEqual(run(['pending', 'add', 'd.md'], self.project).returncode, 0)   # 0001 with action
+        self.assertEqual(run(['pending', 'add', 'n.md'], self.project).returncode, 0)   # 0002 without action
+        self.human = {**os.environ, 'OPERATOR_ALLOW_NONINTERACTIVE_APPROVE': '1'}
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def check(self, command):
+        return run(['guard', 'check', command], self.project).returncode
+
+    def test_shell_writes_into_the_queue_are_blocked_but_reads_pass(self):
+        for command in ['mv .operator/pending/0001-post-x.md .operator/approved/', 'cp d.md .operator/approved/0002.md',
+                        'echo "status: approved" > .operator/approved/0001.md', 'sed -i "" s/pending/approved/ .operator/pending/0001-post-x.md',
+                        'python3 -c "open(\'.operator/approved/0001.md\',\'w\')"', 'rm -rf .operator', 'mv .operator .operator-bak',
+                        f'cp d.md "{self.project}/.operator/approved/x.md"']:
+            with self.subTest(command=command):
+                self.assertEqual(self.check(command), 1)
+        for command in ['ls .operator/pending', 'cat .operator/pending/0001-post-x.md', 'grep -r x .operator/approved',
+                        'op pending list', 'op pending show 0001', 'rm -r .operator/tmp/x', 'rm -f build/tmp.txt']:
+            with self.subTest(command=command):
+                self.assertEqual(self.check(command), 0)
+
+    def test_approve_needs_an_interactive_terminal(self):
+        result = run(['pending', 'approve', '0001'], self.project)   # no TTY, like an agent's shell tool
+        self.assertEqual(result.returncode, 7, result.stderr)
+        self.assertTrue(list((self.project / '.operator' / 'pending').glob('0001-*.md')))
+
+    def test_send_runs_only_the_approved_action(self):
+        self.assertEqual(subprocess.run([sys.executable, '-I', str(OP), 'pending', 'approve', '0001'], cwd=self.project, env=self.human, capture_output=True, text=True).returncode, 0)
+        other = run(['send', '0001', '--', 'echo', 'SOMETHING-ELSE'], self.project)
+        self.assertEqual(other.returncode, 6, other.stderr)
+        self.assertTrue(list((self.project / '.operator' / 'approved').glob('0001-*.md')))
+        same = run(['send', '0001'], self.project)
+        self.assertEqual(same.returncode, 0, same.stderr)
+        self.assertIn('post-to-x', same.stdout)
+        self.assertTrue(list((self.project / '.operator' / 'sent').glob('0001-*.md')))
+
+    def test_ticket_without_action_cannot_be_sent_until_a_human_sets_one(self):
+        subprocess.run([sys.executable, '-I', str(OP), 'pending', 'approve', '0002'], cwd=self.project, env=self.human, capture_output=True, text=True)
+        self.assertEqual(run(['send', '0002', '--', 'echo', 'x'], self.project).returncode, 6)
+        (self.project / 'n.md').write_text('---\ntype: post\nchannel: x\n---\n두 번째 액션 없는 초안입니다. https://example.com\n', encoding='utf-8')
+        run(['pending', 'add', 'n.md'], self.project)   # 0003
+        subprocess.run([sys.executable, '-I', str(OP), 'pending', 'approve', '0003', '--action', 'echo human-chosen'], cwd=self.project, env=self.human, capture_output=True, text=True)
+        sent = run(['send', '0003'], self.project)
+        self.assertEqual(sent.returncode, 0, sent.stderr)
+        self.assertIn('human-chosen', sent.stdout)
+
+    def test_action_cannot_smuggle_queue_commands(self):
+        (self.project / 'e.md').write_text('---\ntype: post\nchannel: x\naction: op pending approve 0002\n---\n승인 명령을 숨긴 초안입니다. https://example.com\n', encoding='utf-8')
+        run(['pending', 'add', 'e.md'], self.project)   # 0003
+        subprocess.run([sys.executable, '-I', str(OP), 'pending', 'approve', '0003'], cwd=self.project, env=self.human, capture_output=True, text=True)
+        self.assertEqual(run(['send', '0003'], self.project).returncode, 6)

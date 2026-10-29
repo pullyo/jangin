@@ -68,7 +68,7 @@ DEFAULT_GUARD = {
         r"\bstripe\b.*\b(charges|payment_intents|payouts|transfers|subscriptions)\b.*\b(create|confirm|capture)\b",
         r"\b(namecheap|godaddy|porkbun|cloudflare)\b.*\b(register|purchase|buy)\b",
         # 삭제·파괴
-        r"\brm\s+-[a-zA-Z]*[rf][a-zA-Z]*\s+(?!\.operator/tmp)",
+        r"\brm\s+(?:-[a-zA-Z]*r[a-zA-Z]*|--recursive)\b(?![^;&|]*\.operator/tmp)",
         r'''\bgit\s+(?:(?:-C|-c|--git-dir|--work-tree)(?:=|\s+)(?:"[^"]*"|'[^']*'|\S+)\s+)*(push\s+.*--force|branch\s+-D|reset\s+--hard)\b''',
         r"\bDROP\s+(TABLE|DATABASE|SCHEMA)\b",
         r"\bsupabase\s+projects\s+delete\b",
@@ -496,7 +496,8 @@ def cmd_pending(args):
             raw = f.read()
         body, meta = parse_front_matter(raw)
         item_id = next_id(od)
-        title = opts.get("title") or meta.get("title") or body.strip().splitlines()[0][:60] if body.strip() else "untitled"
+        first_line = body.strip().splitlines()[0][:60] if body.strip() else ""
+        title = opts.get("title") or meta.get("title") or first_line or "untitled"
         fname = f"{item_id}-{vtype}-{slugify(title)}.md"
         header = {
             "id": item_id, "type": vtype, "title": title,
@@ -547,9 +548,12 @@ def cmd_pending(args):
 
     if sub in ("approve", "reject"):
         if not rest:
-            die(f"op pending {sub} <id> [--note ...]")
+            die(f"op pending {sub} <id> [--note ...] [--action \"<실행할 명령>\"]")
         opts = kv(rest[1:])
         item_id = rest[0]
+        if not (sys.stdin.isatty() and sys.stdout.isatty()) and os.environ.get("OPERATOR_ALLOW_NONINTERACTIVE_APPROVE") != "1":
+            die("승인/거절은 사람이 대화형 터미널에서만 할 수 있다 (에이전트의 셸 도구에는 터미널이 없다). "
+                "자동화 스크립트에서 꼭 필요하면 OPERATOR_ALLOW_NONINTERACTIVE_APPROVE=1 을 사람이 직접 설정해라.", 7)
         s, p = find_item(od, item_id, ("pending",))
         if not p:
             die(f"pending 에 {item_id} 가 없다.")
@@ -557,6 +561,12 @@ def cmd_pending(args):
             raw = f.read()
         body, meta = parse_front_matter(raw)
         new_status = "approved" if sub == "approve" else "rejected"
+        if sub == "approve":
+            if opts.get("action"):
+                meta["action"] = opts["action"]
+            if not (meta.get("action") or "").strip():
+                print(f"참고: {item_id} 에 실행 명령(action)이 없다. 이대로 approve 하면 `op send` 는 거부된다. "
+                      f"`op pending approve {item_id} --action \"<명령>\"` 으로 명령까지 승인해라.")
         meta["status"] = new_status
         meta[new_status] = now()
         if opts.get("note") or opts.get("reason"):
@@ -575,8 +585,10 @@ def cmd_pending(args):
 
 # ---------------------------------------------------------------- send (승인된 티켓으로만 밖으로)
 def cmd_send(args):
-    if "--" not in args or args.index("--") == 0:
-        die("op send <id> [--shell] -- <command ...>")
+    if "--" not in args:
+        args = args + ["--"]
+    if args.index("--") == 0:
+        die("op send <id> [-- <승인된 action 과 같은 명령>]")
     i = args.index("--")
     head, cmdv = args[:i], args[i + 1:]
     item_id = head[0]
@@ -587,14 +599,22 @@ def cmd_send(args):
     if not p:
         s2, _ = find_item(od, item_id)
         die(f"{item_id} 는 approved 상태가 아니다 (현재: {s2 or '없음'}). 사람이 승인한 티켓으로만 보낼 수 있다.", 5)
-    if not cmdv:
-        die("실행할 명령이 없다.")
-    cmd_str = " ".join(cmdv) if use_shell else shlex.join(cmdv)
-    print(f"[send {item_id}] {cmd_str}")
-    r = subprocess.run(cmd_str if use_shell else cmdv, shell=use_shell, cwd=root)
     with open(p, encoding="utf-8") as f:
         raw = f.read()
     body, meta = parse_front_matter(raw)
+    action = (meta.get("action") or "").strip()
+    if not action:
+        die(f"{item_id} 에는 승인된 실행 명령(action)이 없다. 사람이 `op pending approve {item_id} --action \"<명령>\"` 으로 명령까지 승인해야 보낼 수 있다.", 6)
+    if cmdv:
+        given = " ".join(cmdv) if use_shell else shlex.join(cmdv)
+        if " ".join(given.split()) != " ".join(action.split()):
+            die(f"보내려는 명령이 승인된 action 과 다르다.\n  승인: {action}\n  요청: {given}\n명령을 바꾸려면 새 티켓을 올려 다시 승인받아라.", 6)
+    # 승인된 action 그대로 실행한다. 인용이 필요한 명령이라 셸로 넘긴다.
+    cmd_str, use_shell = action, True
+    if re.search(r"\bop(?:\.py)?\s+(?:pending|send)\b", action):
+        die("action 안에서 op 의 큐 명령을 실행할 수 없다.", 6)
+    print(f"[send {item_id}] {cmd_str}")
+    r = subprocess.run(cmd_str, shell=True, cwd=root)
     meta["executed"] = now()
     meta["command"] = cmd_str
     meta["exit"] = str(r.returncode)
@@ -683,18 +703,49 @@ def operator_roots(base, cmd, paths):
     return [os.path.join(r, OP_DIR_NAME) for r in roots]
 
 
+# 큐 폴더를 읽기만 하는 명령. 이 밖의 명령이 큐 경로를 언급하면 쓰기로 간주해 막는다
+# (mv/cp/echo >/sed -i/python 한 줄 등 어떤 형태든). `op ...` 자체는 이 검사에서 제외된다.
+_READ_ONLY = re.compile(r"^\s*(?:cat|ls|ll|dir|head|tail|less|more|grep|rg|find|wc|stat|file|diff|jq|tree|bat|type|Get-Content|Get-ChildItem|Select-String)\b")
+_QUEUE_DIRS = ("pending", "approved", "sent", "rejected")
+
+
+def touches_queue(cmd, od, base):
+    """셸 명령이 이 프로젝트의 승인 큐 경로를 언급하면 그 상대 경로를 돌려준다."""
+    if re.search(r"\bop(?:\.py)?\s+(?:pending|send|status|pass|verify|init|guard|llm)\b", cmd) and not re.search(r"[;&|]", cmd):
+        return None  # op 명령 한 줄 — 큐 처리는 op 자신이 규칙대로 한다
+    root = os.path.dirname(od)
+    names = "|".join(_QUEUE_DIRS)
+    for m in re.finditer(r"(?:^|[\s\"'=(])((?:[A-Za-z]:)?[^\s\"';|&<>()]*\.operator[\\/](?:%s)(?:[\\/][^\s\"';|&<>()]*)?)" % names, cmd):
+        raw = os.path.expanduser(m.group(1))
+        ap = os.path.abspath(raw if os.path.isabs(raw) else os.path.join(base or root, raw))
+        try:
+            rel = os.path.relpath(ap, root)
+        except ValueError:
+            continue
+        if not rel.startswith(".."):
+            return rel
+    # 큐 폴더 전체나 .operator 자체를 통째로 옮기거나 지우는 경우
+    if re.search(r"\b(mv|rm|cp|rsync|rmdir|Move-Item|Remove-Item|Copy-Item)\b[^;&|]*\.operator(?:[\\/]?)(?:\s|$|[\"'])", cmd):
+        return ".operator"
+    return None
+
+
 def guard_decide(cmd, paths, od, base=None):
     """(deny: bool, reason). Relative file paths are resolved against base (the hook's cwd)."""
     rules = guard_rules(od)
     root = os.path.dirname(od)
+    queue_msg = "은 승인 큐 영역이다. 에이전트가 직접 쓸 수 없다. 초안은 `op pending add` 로 올리고, 승인/거절은 사람이 터미널에서 한다."
     for p in paths:
         ap = os.path.abspath(os.path.join(base or root, p)) if not os.path.isabs(p) else p
         rel = os.path.relpath(ap, root)
         for dp in rules["deny_paths"]:
             if rel.startswith(dp.rstrip("/")):
-                return True, f"'{rel}' 은 승인 큐 영역이다. 에이전트가 직접 쓸 수 없다. 초안은 `op pending add` 로 올리고, 승인/거절은 사람이 터미널에서 한다."
+                return True, f"'{rel}' " + queue_msg
     if not cmd.strip():
         return False, ""
+    touched = touches_queue(cmd, od, base)
+    if touched and not _READ_ONLY.match(cmd):
+        return True, f"'{touched}' " + queue_msg + " 셸로 옮기거나 덮어쓰는 것도 같은 규칙이다."
     for pat in rules["human_only_commands"]:
         if re.search(pat, cmd):
             return True, "승인/거절은 사람만 한다. 사용자에게 `op pending list` 로 확인하고 `op pending approve <id>` 를 자기 터미널에서 실행해 달라고 요청해라."
@@ -817,8 +868,8 @@ def main():
   verify <file> --type post|email|research|site|other [--channel x]
   pending add <file> --type ... [--channel x] [--title ...] [--action "명령"]
   pending list [--status pending|approved|sent|rejected] | show <id>
-  pending approve <id> [--note ...] | reject <id> --reason ...   (사람만)
-  send <id> [--shell] -- <command ...>  승인된 티켓으로 실제 실행
+  pending approve <id> [--action "명령"] [--note ...] | reject <id> --reason ...   (사람만, 대화형 터미널)
+  send <id> [-- <명령>]                   승인된 action 그대로 실행 (명령을 주면 action 과 같아야 함)
   guard [--format claude|codex|cursor|gemini]   (훅: stdin 으로 JSON)
   guard check [--cwd DIR] "<command>"     이 명령이 막히는지 확인
   llm --role classify|summarize|tag|extract [--input f] "프롬프트"
