@@ -69,6 +69,14 @@ operator-skill/
 
 설계 근거(Foundable 조사 요약)는 [skills/operator/references/foundable-research.md](skills/operator/references/foundable-research.md).
 
+## 테스트
+
+```bash
+python3 -m unittest discover -s tests
+```
+
+`tests/test_guard.py` 는 Claude Code·Codex 가 보내는 것과 같은 훅 JSON 을 실제 `op.py guard` 프로세스에 넣어, 세션 폴더·`cd`·`git -C`·파일 경로로 operator 프로젝트를 찾아 막는지 확인한다.
+
 ## 라이선스
 
 MIT

@@ -62,14 +62,14 @@ DEFAULT_GUARD = {
         r"\b(vercel|netlify|wrangler|fly|flyctl|railway|render)\s+(deploy|publish|up)\b",
         r"\bvercel\s+--prod\b",
         r"\bsupabase\s+(db\s+push|functions\s+deploy|secrets\s+set)\b",
-        r"\bgit\s+push\b",
+        r'''\bgit\s+(?:(?:-C|-c|--git-dir|--work-tree)(?:=|\s+)(?:"[^"]*"|'[^']*'|\S+)\s+)*push\b''',
         r"\bnpm\s+publish\b",
         # 결제·도메인
         r"\bstripe\b.*\b(charges|payment_intents|payouts|transfers|subscriptions)\b.*\b(create|confirm|capture)\b",
         r"\b(namecheap|godaddy|porkbun|cloudflare)\b.*\b(register|purchase|buy)\b",
         # 삭제·파괴
         r"\brm\s+-[a-zA-Z]*[rf][a-zA-Z]*\s+(?!\.operator/tmp)",
-        r"\bgit\s+(push\s+.*--force|branch\s+-D|reset\s+--hard)\b",
+        r'''\bgit\s+(?:(?:-C|-c|--git-dir|--work-tree)(?:=|\s+)(?:"[^"]*"|'[^']*'|\S+)\s+)*(push\s+.*--force|branch\s+-D|reset\s+--hard)\b''',
         r"\bDROP\s+(TABLE|DATABASE|SCHEMA)\b",
         r"\bsupabase\s+projects\s+delete\b",
     ],
@@ -618,7 +618,9 @@ def extract_from_hook_input(data):
         ti = {}
     cmd = ti.get("command") or data.get("command") or ti.get("cmd") or ""
     if isinstance(cmd, list):  # Codex shell: ["bash","-lc","..."]
-        cmd = " ".join(str(c) for c in cmd)
+        parts = [str(c) for c in cmd]
+        # The script is the argument after -c/-lc; joining everything would lose its quoting.
+        cmd = parts[-1] if len(parts) >= 3 and parts[-2] in ("-c", "-lc", "/c", "/C", "-Command") else " ".join(parts)
     paths = []
     for k in ("file_path", "path", "filePath", "notebook_path"):
         v = ti.get(k) or data.get(k)
@@ -631,12 +633,62 @@ def extract_from_hook_input(data):
     return str(cmd), paths
 
 
-def guard_decide(cmd, paths, od):
-    """(deny: bool, reason)"""
+# A session opened elsewhere can still act inside an operator project: `cd proj && wrangler deploy`,
+# `git -C proj push`, or a Write to proj/.operator/pending/x. Find every operator project the call
+# can touch, not only the one above the hook's working directory.
+_CD = re.compile(r"""(?:^|[;&|(\n]|&&|\|\|)\s*(?:builtin\s+)?(?:cd|pushd|chdir|Set-Location|sl)\s+(?:/d\s+|-LiteralPath\s+|-Path\s+)?("[^"]*"|'[^']*'|[^\s;&|)]+)""", re.I)
+_GIT_C = re.compile(r"""\bgit\s+(?:-c\s+\S+\s+)*-C\s+("[^"]*"|'[^']*'|\S+)""")
+_DIR_OPTS = re.compile(r"""(?:--cwd|--prefix|--dir|--cd)(?:=|\s+)("[^"]*"|'[^']*'|[^\s;&|]+)""")
+
+
+def _unquote(value):
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        return value[1:-1]
+    return value
+
+
+def command_dirs(cmd, base):
+    """Directories a shell command changes into or points tools at, resolved against base."""
+    dirs = []
+    for pattern in (_CD, _GIT_C, _DIR_OPTS):
+        for match in pattern.finditer(cmd or ""):
+            raw = _unquote(match.group(1))
+            if not raw or raw == "-" or "$" in raw or "%" in raw:
+                continue
+            raw = os.path.expanduser(raw)
+            dirs.append(os.path.abspath(raw if os.path.isabs(raw) else os.path.join(base, raw)))
+    # Each `cd` applies to what follows, so a later relative cd is relative to the earlier one.
+    chained, cur = [], base
+    for match in _CD.finditer(cmd or ""):
+        raw = os.path.expanduser(_unquote(match.group(1)))
+        if not raw or raw == "-" or "$" in raw or "%" in raw:
+            continue
+        cur = os.path.abspath(raw if os.path.isabs(raw) else os.path.join(cur, raw))
+        chained.append(cur)
+    return list(dict.fromkeys(dirs + chained))
+
+
+def operator_roots(base, cmd, paths):
+    """Every .operator directory the call can affect: from the working directory, the command's cd/-C
+    targets, and each file path's own folder (absolute or relative to the working directory)."""
+    candidates = [base] + command_dirs(cmd, base)
+    for p in paths:
+        ap = p if os.path.isabs(p) else os.path.join(base, p)
+        candidates.append(os.path.dirname(os.path.abspath(ap)))
+    roots = []
+    for d in candidates:
+        root = find_root(d)
+        if root and root not in roots:
+            roots.append(root)
+    return [os.path.join(r, OP_DIR_NAME) for r in roots]
+
+
+def guard_decide(cmd, paths, od, base=None):
+    """(deny: bool, reason). Relative file paths are resolved against base (the hook's cwd)."""
     rules = guard_rules(od)
     root = os.path.dirname(od)
     for p in paths:
-        ap = os.path.abspath(os.path.join(root, p)) if not os.path.isabs(p) else p
+        ap = os.path.abspath(os.path.join(base or root, p)) if not os.path.isabs(p) else p
         rel = os.path.relpath(ap, root)
         for dp in rules["deny_paths"]:
             if rel.startswith(dp.rstrip("/")):
@@ -666,29 +718,43 @@ def guard_decide(cmd, paths, od):
 def cmd_guard(args):
     opts = kv(args)
     fmt = opts.get("format", "claude")
-    od = op_dir(required=False)
     if opts.get("_") and opts["_"][0] == "check":
         cmd = " ".join(opts["_"][1:])
-        if od is None:
+        base = os.path.abspath(opts.get("cwd") or os.getcwd())
+        roots = operator_roots(base, cmd, [])
+        if not roots:
             print("ALLOW (no .operator here)")
             return
-        deny, reason = guard_decide(cmd, [], od)
-        print(("DENY: " + reason) if deny else "ALLOW")
-        sys.exit(1 if deny else 0)
+        for od in roots:
+            deny, reason = guard_decide(cmd, [], od, base)
+            if deny:
+                print("DENY: " + reason)
+                sys.exit(1)
+        print("ALLOW")
+        return
     try:
         data = json.load(sys.stdin) if not sys.stdin.isatty() else {}
     except Exception:
         data = {}
-    if od is None:
-        # 이 프로젝트에선 operator 가 활성화되지 않았다 → 간섭하지 않는다.
+    # Claude Code and Codex pass the session's working directory as "cwd"; fall back to our own.
+    base = data.get("cwd") if isinstance(data.get("cwd"), str) and os.path.isabs(data.get("cwd")) else os.getcwd()
+    cmd, paths = extract_from_hook_input(data)
+    roots = operator_roots(base, cmd, paths)
+    if not roots:
+        # 이 호출이 닿는 곳 어디에도 operator 가 활성화되지 않았다 → 간섭하지 않는다.
         if fmt == "cursor":
             print(json.dumps({"permission": "allow"}))
         return
-    cmd, paths = extract_from_hook_input(data)
-    deny, reason = guard_decide(cmd, paths, od)
-    log_path = os.path.join(od, "guard.log")
-    with open(log_path, "a", encoding="utf-8") as f:
-        f.write(json.dumps({"t": now(), "deny": deny, "cmd": cmd[:200], "paths": paths, "fmt": fmt}, ensure_ascii=False) + "\n")
+    deny, reason = False, ""
+    for od in roots:
+        d, r = guard_decide(cmd, paths, od, base)
+        try:
+            with open(os.path.join(od, "guard.log"), "a", encoding="utf-8") as f:
+                f.write(json.dumps({"t": now(), "deny": d, "cmd": cmd[:200], "paths": paths, "cwd": base, "fmt": fmt}, ensure_ascii=False) + "\n")
+        except OSError:
+            pass
+        if d and not deny:
+            deny, reason = True, r
     if not deny:
         if fmt == "cursor":
             print(json.dumps({"permission": "allow"}))
@@ -754,7 +820,7 @@ def main():
   pending approve <id> [--note ...] | reject <id> --reason ...   (사람만)
   send <id> [--shell] -- <command ...>  승인된 티켓으로 실제 실행
   guard [--format claude|codex|cursor|gemini]   (훅: stdin 으로 JSON)
-  guard check "<command>"                 이 명령이 막히는지 확인
+  guard check [--cwd DIR] "<command>"     이 명령이 막히는지 확인
   llm --role classify|summarize|tag|extract [--input f] "프롬프트"
 """)
         return

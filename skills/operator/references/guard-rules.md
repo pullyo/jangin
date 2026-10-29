@@ -4,13 +4,26 @@
 뽑아 아래 규칙과 대조하고, 걸리면 호출을 거부한다. 거부 사유는 모델에게 돌아가서 "그럼 pending 에 올려야겠다"
 로 이어진다. `.operator/` 가 없는 프로젝트에선 아무것도 막지 않는다 (간섭 없음).
 
+## 어느 프로젝트의 규칙을 적용하나
+
+호출이 닿을 수 있는 operator 프로젝트를 모두 찾아, 그중 하나라도 막으면 막는다. 찾는 곳:
+
+1. 훅 입력의 `cwd` (Claude Code·Codex 가 세션 작업 폴더를 넘긴다. 없으면 훅 프로세스의 작업 폴더)
+2. 명령 안의 `cd` / `pushd` / `Set-Location` 대상 (연속된 상대 `cd` 도 따라간다), `git -C <폴더>`, `--cwd` / `--prefix` / `--dir`
+3. Write·Edit·apply_patch 대상 파일이 있는 폴더
+
+각 위치에서 위로 올라가며 `.operator/` 를 찾는다. 그래서 다른 폴더에서 연 세션이 `cd 프로젝트 && wrangler deploy`
+처럼 들어가 실행하는 명령도 막힌다. `$HOME`, `%USERPROFILE%` 같은 변수가 든 경로는 해석하지 않는다(그런 명령은
+세션 폴더 기준으로만 본다). 판정은 찾은 프로젝트마다 그 프로젝트의 `guard.log` 에 세션 `cwd` 와 함께 남는다.
+`op guard check --cwd <폴더> "<명령>"` 으로 같은 판정을 미리 볼 수 있다.
+
 ## 기본 차단 명령 (`DEFAULT_GUARD.deny_commands`, 대소문자 무시)
 
 | 분류 | 패턴 (요지) |
 |---|---|
 | 발송 | `sendmail`, `mail`, `mutt`, `swaks`, `gh pr/issue create/merge/comment`, `agentmail ... send` |
 | 게시 | `curl` → twitter/x/facebook/threads/linkedin/instagram API, `curl -X POST/PUT/DELETE/PATCH` 외부 URL (localhost 제외) |
-| 배포 | `vercel/netlify/wrangler/fly/railway/render deploy|publish|up`, `vercel --prod`, `supabase db push / functions deploy / secrets set`, `git push`, `npm publish` |
+| 배포 | `vercel/netlify/wrangler/fly/railway/render deploy|publish|up`, `vercel --prod`, `supabase db push / functions deploy / secrets set`, `git push` (`git -C <폴더> push`, `git -c … push` 포함), `npm publish` |
 | 결제·도메인 | `stripe ... charges/payment_intents/... create/confirm/capture`, 레지스트라 `register/purchase/buy` |
 | 파괴 | `rm -r*/-f*` (`.operator/tmp` 제외), `git push --force`, `git branch -D`, `git reset --hard`, `DROP TABLE/DATABASE/SCHEMA`, `supabase projects delete` |
 
