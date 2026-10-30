@@ -119,6 +119,22 @@ op connect x                         # then X (see channels guide), Threads, ema
 op telegram                          # optional: approve from your phone
 ```
 
+## Using it in Hermes (a dedicated business assistant)
+
+With [Hermes Agent](https://github.com/NousResearch/hermes-agent) as the engine you use operator from an app and from
+messengers, without a terminal. Hermes itself is not modified: operator adds a plugin, the skill and a personality (SOUL.md).
+Checked against Hermes 0.22.5.
+
+```bash
+git clone https://github.com/pullyo/operator-skill
+sh operator-skill/hermes/operator/install.sh      # creates the 'operator' profile with the plugin, skill and personality
+```
+
+In the chat (Desktop, or a connected Telegram etc.): `/idea <one line>`, `/project`, `/stage`, `/advance`, `/back <stage> <reason>`,
+`/inbox`, `/ok <id>`, `/reject <id> <reason>`, `/setup`. Hermes' built-in `/approve` is for dangerous-command prompts and is not
+operator's `/ok`. Projects made with `/idea` refuse terminal approvals; to accept only commands typed in a messenger, set
+`"human_via": ["messenger"]` in `.operator/guard.json`. Design, and what is and is not verified: [docs/hermes-design.md](docs/hermes-design.md).
+
 ## Commands
 
 | Command | Who | Purpose |
@@ -190,6 +206,8 @@ operator-skill/
 ├── .claude-plugin/        Claude Code plugin + marketplace manifest
 ├── .codex-plugin/         Codex plugin manifest
 ├── hooks/hooks.json       Claude Code plugin hook (approval gate)
+├── hermes/operator/       Hermes plugin (slash commands, guard hook, SOUL.md, install.sh)
+├── docs/                  Design notes (hermes-design.md)
 ├── tests/                 End-to-end tests that drive the real `op` process
 └── skills/operator/       The skill (Agent Skills format)
     ├── SKILL.md           What the agent reads

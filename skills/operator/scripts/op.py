@@ -180,6 +180,11 @@ def human_via(od):
     return via or list(AUTHORITY_KINDS)
 
 
+def human_hint(od, cli, slash):
+    """사람에게 부탁할 명령. 터미널 경로를 끈 프로젝트(Hermes)는 슬래시 명령으로 안내한다."""
+    return f"`{cli}` (자기 터미널)" if "terminal" in human_via(od) else f"Hermes 에서 `{slash}`"
+
+
 def require_human(od, authority, what):
     if not isinstance(authority, Authority):
         raise OpError(f"{what}: 사람의 결정이 필요하다.", 7)
@@ -476,7 +481,7 @@ def cmd_pass(args):
             f.write("\n".join(md) + "\n")
         os.remove(sp)
         print(f"pass 종료: {pid} → .operator/passes/{pid}.md")
-        print(f"승인 대기 {len(pend)}건. 사람이 `op pending list` 로 확인한다.")
+        print(f"승인 대기 {len(pend)}건. 사람이 {human_hint(od, 'op pending list', '/inbox')} 로 확인한다.")
         return
 
     if sub == "show":
@@ -675,7 +680,7 @@ def cmd_pending(args):
         with open(dst, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
         print(f"승인 대기에 올림: .operator/pending/{fname}")
-        print("이제 이 항목은 사람이 `op pending approve " + item_id + "` 할 때까지 밖으로 나가지 않는다.")
+        print(f"이제 이 항목은 사람이 {human_hint(od, 'op pending approve ' + item_id, '/ok ' + item_id)} 로 승인할 때까지 밖으로 나가지 않는다.")
         return
 
     if sub == "list":
@@ -1147,7 +1152,7 @@ def cmd_stage(args):
             ms = load_milestones(od)
             print(f"마일스톤: {len([m for m in ms if m.get('done')])}/{len(ms)} 통과  (op milestone list)")
         checks, target = stage_checks(od, cur, cfg)
-        print(f"넘어가기 조건 ({'모두 통과 → 사람에게 `op stage advance` 요청' if all(c[1] for c in checks) else '아직'}):")
+        print(f"넘어가기 조건 ({'모두 통과 → 사람에게 ' + human_hint(od, 'op stage advance', '/advance') + ' 요청' if all(c[1] for c in checks) else '아직'}):")
         print_checks(checks)
         return
 
@@ -1170,7 +1175,7 @@ def cmd_stage(args):
         print(f"{STAGE_KO[cur]} 단계: {'PASS' if ok else 'FAIL'}" + (f" → 다음: {STAGE_KO[target]}" if ok and target else ""))
         print_checks(checks)
         if ok:
-            print("사람에게 결과를 보여 주고 `op stage advance` 를 자기 터미널에서 실행해 달라고 요청해라.")
+            print(f"사람에게 결과를 보여 주고 {human_hint(od, 'op stage advance', '/advance')} 를 실행해 달라고 요청해라.")
         sys.exit(0 if ok else 1)
 
     if sub == "history":

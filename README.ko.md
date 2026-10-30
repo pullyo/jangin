@@ -118,6 +118,30 @@ op connect x                         # 그다음 X (채널 설정 참고), Threa
 op telegram                          # 선택: 휴대폰으로 승인
 ```
 
+## Hermes 에서 쓰기 (전용 사업 비서)
+
+[Hermes Agent](https://github.com/NousResearch/hermes-agent) 를 엔진으로 쓰면 터미널 없이 앱과 메신저로 씁니다.
+Hermes 코드는 고치지 않고, 플러그인·스킬·성격(SOUL.md)만 넣습니다. Hermes 0.22.5 에서 확인했습니다.
+
+```bash
+git clone https://github.com/pullyo/operator-skill
+sh operator-skill/hermes/operator/install.sh      # 프로필 'operator' 를 만들고 플러그인·스킬·성격을 넣는다
+```
+
+대화창(Desktop, 또는 연결한 텔레그램 등)에서:
+
+| 명령 | 하는 일 |
+|---|---|
+| `/idea 동네 빵집 예약 페이지` | 프로젝트를 만들고 발견 단계 시작 |
+| `/project` · `/stage` | 상태, 지금 단계와 넘어가기 조건 |
+| `/advance` · `/back 발견 고객이 너무 넓다` | 단계 이동 (나만) |
+| `/inbox` · `/ok 0003` · `/reject 0003 너무 딱딱함` | 승인 대기 확인과 결정 (나만). 승인하면 플러그인이 바로 보냅니다 |
+| `/setup` | 프로젝트 폴더, 지금 프로젝트, `/setup unlock` (키체인 토큰 읽기) |
+
+Hermes 내장 `/approve` 는 위험 명령 허락용이라 operator 의 `/ok` 와 다릅니다. `/idea` 로 만든 프로젝트는 터미널 승인을 받지 않고
+Hermes 에서 친 명령만 받습니다. 휴대폰 메신저에서 친 명령만 받으려면 `.operator/guard.json` 에 `"human_via": ["messenger"]`.
+설계와 확인한 것·아직인 것: [docs/hermes-design.md](docs/hermes-design.md).
+
 ## 명령
 
 | 명령 | 누가 | 용도 |
@@ -188,6 +212,8 @@ operator-skill/
 ├── .claude-plugin/        Claude Code 플러그인 + 마켓플레이스 매니페스트
 ├── .codex-plugin/         Codex 플러그인 매니페스트
 ├── hooks/hooks.json       Claude Code 플러그인 훅 (승인 게이트)
+├── hermes/operator/       Hermes 플러그인 (슬래시 명령, 가드 훅, SOUL.md, install.sh)
+├── docs/                  설계 (hermes-design.md)
 ├── tests/                 실제 `op` 프로세스를 돌리는 종단 테스트
 └── skills/operator/       스킬 본체 (Agent Skills 형식)
     ├── SKILL.md           에이전트가 읽는 문서
