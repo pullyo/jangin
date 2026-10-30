@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/jangin-logo.png" alt="Jangin logo: a craftsman hammering at an anvil" width="200"></p>
+
 # Jangin (장인)
 
 **English** · [한국어](README.ko.md)

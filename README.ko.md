@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/jangin-logo.png" alt="Jangin 로고: 모루 위에서 망치질하는 장인" width="200"></p>
+
 # Jangin (장인)
 
 [English](README.md) · **한국어**
