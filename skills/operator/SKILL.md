@@ -1,38 +1,38 @@
 ---
 name: operator
 description: >-
-  1인 개발자의 사업·프로젝트를 AI 직원처럼 "굴려주는" 운영 루프. "AI 직원" 서비스가
-  인프라로 강제하는 네 가지(승인 게이트, 재개 가능한 pass, 검증 게이트, 모델 라우팅)를
-  셸 스크립트와 JSON 파일로 옮긴 것이다. 사용자가 사업/프로젝트 운영 자동화, 소셜 포스트·
-  이메일·아웃리치 초안과 발송, 시장·경쟁사 리서치 루틴, 사이트 배포, "AI 직원", "운영 루프",
-  "pass", "승인 큐", "Needs your OK", "재개", "operator" 를 언급하거나, 에이전트가 밖으로 나가는 행동(발송·게시·배포·
-  결제·삭제)을 해야 하는 상황이면 반드시 이 스킬을 써라. 명시적으로 "스킬"이라 말하지 않아도,
-  "매일 돌려줘", "밤새 돌려줘", "초안 만들어서 올려놔", "승인 대기 뭐 있어" 같은 말도 해당한다.
-  Claude Code 외에 Codex CLI, Cursor, Gemini CLI 등 Agent Skills 표준을 지원하는 모든 도구에서 동작.
+  1인 개발자의 아이디어를 함께 다듬고, 만들고, 출시해서 매일 "굴려주는" AI 직원 운영 루프.
+  발견 → 검증 → 만들기 → 운영 → 배우기 단계를 기록하고, 밖으로 나가는 행동(발송·게시·배포·결제·삭제)은
+  훅과 승인 큐로 막아 사람이 승인한 것만 실행한다. 사용자가 사업 아이디어 의논, "이거 팔릴까",
+  아이디어 검증, MVP 만들기, 출시, 사업/프로젝트 운영 자동화, 소셜 포스트·이메일·아웃리치 초안과 발송,
+  시장·경쟁사 리서치 루틴, 사이트 배포, 반응·지표 회고, "AI 직원", "운영 루프", "pass", "승인 큐",
+  "Needs your OK", "재개", "operator" 를 언급하거나, 에이전트가 밖으로 나가는 행동을 해야 하는 상황이면
+  반드시 이 스킬을 써라. "매일 돌려줘", "밤새 돌려줘", "초안 만들어서 올려놔", "승인 대기 뭐 있어",
+  "다음 단계로 가자" 같은 말도 해당한다. Claude Code, Codex CLI, Cursor, Gemini CLI 등 Agent Skills
+  표준을 지원하는 모든 도구에서 동작.
 license: MIT
 compatibility: >-
   python3 3.8+ (표준 라이브러리만). Agent Skills 표준을 읽는 모든 에이전트. 승인 게이트의
   물리적 차단은 PreToolUse 류 훅을 지원하는 도구(Claude Code, Codex, Cursor, Gemini CLI)에서만 100%.
 metadata:
   author: plant313
-  version: "0.4.0"
+  version: "0.5.0"
 ---
 
-# operator — 적게 하지만 절대 안 어기는 운영 루프
+# operator — 아이디어부터 운영까지, 적게 하지만 절대 안 어기는 AI 직원
 
-"AI 직원" 서비스는 "만들어준다"가 아니라 "굴려준다"로 성립한다. 모델은 빌려 쓰므로 차별점이
-아니고, 진짜 차별점은 LLM 을 둘러싼 **실행 환경**이다. 이 스킬은 그 환경을 1인 개발자가
-감당할 수 있는 크기로 줄인 것이다 (Foundable 의 공개된 운영 방식에서 착안한 독립 구현이며,
-해당 회사와 무관하다. 분석은 [references/foundable-research.md](references/foundable-research.md)). 하는 일은 적지만 아래 네 가지는 절대 어기지 않는다.
+"AI 직원" 서비스는 "만들어준다"에서 끝나지 않고 "같이 정하고, 만들고, 굴려준다"로 성립한다. 모델은 빌려 쓰므로
+차별점이 아니고, 진짜 차별점은 LLM 을 둘러싼 **실행 환경**이다. 이 스킬은 그 환경을 1인 개발자가 감당할 수 있는
+크기로 줄인 것이다 (공개된 AI 직원 서비스의 운영 방식에서 착안한 독립 구현,
+[references/foundable-research.md](references/foundable-research.md)). 하는 일은 적지만 아래 다섯 가지는 절대 어기지 않는다.
 
-| 강제 장치 | 기존 플러그인 ("지시문 더미") | 이 스킬 | 구현 |
+| 강제 장치 | 지시문만 있는 플러그인 | 이 스킬 | 구현 |
 |---|---|---|---|
-| 승인 게이트 | "확인받아라"고 적음 → 확률 | 발송·게시·배포·결제·삭제 명령을 **물리적으로 차단**, 승인 큐로 우회 → 100% | `op guard` (훅) |
-| 재개 | 지난 대화 읽고 추론해서 이어감 | 단계마다 `state.json` 에 기록, 다음 단계부터 실행 | `op pass` |
-| 검증 게이트 | 코드만 테스트 | 모든 산출물에 적용. 실패하면 승인 큐에도 못 올라감 | `op verify` (큐 등록 시 자동) |
-| 모델 라우팅 | Claude 만 호출 | 분류·요약은 로컬 모델, 판단·초안·코드는 너 | `op llm` |
-
-밖으로 나가는 것은 100% 사람 손을 거치고, 끊겨도 처음부터 하지 않는다. 이게 이 스킬의 전부다.
+| 단계 | 매번 "운영 중인 제품"이라 가정 | 지금 단계에 맞는 일만 한다. 다음 단계로는 사람만 넘긴다 | `op stage` |
+| 승인 게이트 | "확인받아라"고 적음 → 확률 | 발송·게시·배포·결제·삭제를 **물리적으로 차단**, 승인 큐로 우회 | `op guard` (훅) |
+| 재개 | 지난 대화를 읽고 추론 | 단계마다 기록, 끊긴 지점부터 | `op pass`, `op milestone` |
+| 검증 게이트 | 코드만 테스트 | 모든 산출물과 단계 문서에 적용. 실패하면 큐에도 못 오르고 단계도 못 넘김 | `op verify`, `op stage check` |
+| 모델 라우팅 | 큰 모델만 호출 | 분류·요약은 로컬 모델, 판단·초안·코드는 너 | `op llm` |
 
 ## 0. 준비 (매 세션 처음 한 번)
 
@@ -42,112 +42,143 @@ metadata:
 
 ```bash
 op status            # .operator/ 가 없으면 "먼저 op init" 이라고 나온다
-op init              # 프로젝트 루트에서 한 번. .operator/{pending,approved,sent,passes,...} 생성
+op init              # 프로젝트 루트에서 한 번. 새 프로젝트는 발견 단계에서 시작한다
+op init --stage operate   # 이미 운영 중인 제품이면 처음 한 번만 이렇게. 그 뒤로 단계는 사람만 바꾼다
+op stage             # 지금 단계, 할 일, 넘어가기 조건
 ```
 
-`op status` 결과로 지금 어느 모드인지 판단해라:
-- `business.md: 없음` → **plan** 부터
-- `진행 중인 pass` 가 있음 → 사용자가 뭐라 하든 먼저 그 pass 를 **이어서** 끝낸다 (재개 원칙)
-- `pending: N` 이 0 보다 큼 → 사용자에게 알려라. 승인은 사용자 몫이다.
+`op status` 와 `op stage` 결과로 지금 할 일을 정해라. 우선순위:
+1. `진행 중인 pass` 가 있으면 사용자가 뭐라 하든 먼저 그 pass 를 **이어서** 끝낸다 (재개 원칙).
+2. `pending` 이 0 보다 크면 사용자에게 알린다. 승인은 사용자 몫이다.
+3. 그다음은 **지금 단계의 일**을 한다 (§1). 단계에 맞지 않는 요청(발견 단계에서 "홍보 글 써 줘")을 받으면
+   지금 단계와 이유를 말하고, 사람이 단계를 옮길지 정하게 한다.
 
 훅이 설치돼 있는지 확실치 않으면 `op guard check "git push"` 를 실행해 `DENY` 가 나오는지 본다.
 훅 없이도 스킬은 동작하지만 그땐 차단이 "지시"로 내려앉는다. 사용자에게 README 의 훅 설치를 권해라.
 
-## 1. 모드
+## 1. 단계 — 지금은 무엇을 할 때인가
 
-### plan — 아이디어 한 문장 → `.operator/business.md`
+```
+발견 → 검증 → 만들기 → 운영 → 배우기 → (사람이 고른 단계: 운영 | 만들기 | 발견)
+```
 
-사용자의 아이디어를 받아 사업/프로젝트의 정체를 한 파일로 고정한다. 이후 모든 초안은 이 파일을
-근거로 쓴다. 템플릿은 [assets/templates/business.md](assets/templates/business.md).
+단계마다 산출물 문서 `.operator/stages/<단계>.md` 가 있다. `op stage doc` 이 템플릿을 만들고, `op stage check` 가
+넘어가기 조건을 검사한다. **조건을 통과해도 너는 넘기지 못한다.** 검사 결과를 보여 주고 사용자에게 자기 터미널에서
+`op stage advance` 를 실행해 달라고 요청해라. 사람이 `op stage back --to <단계> --reason ...` 으로 되돌리면
+`op stage` 에 이유가 보인다. 그 이유를 먼저 반영해라. 단계별 상세와 예시: [references/stages.md](references/stages.md)
 
-1. 모르는 건 짧게 물어라: 타깃 고객 1문장, 채널(x/threads/linkedin/instagram/email 중), 톤, 쓰면 안 되는 말.
-2. `.operator/business.md` 를 템플릿대로 작성. 이름·한 줄 소개·타깃·브랜드 톤·채널·CTA·금지어.
-3. `.operator/config.json` 의 `verify.required_words`(브랜드명 등), `verify.banned_words`, 사이트가 있으면
-   `verify.site.command`(예: `npm run build`) 를 채운다. 검증 게이트는 여기서 읽는다.
+| 단계 | 네가 하는 일 | 큐에 올릴 수 있는 것 | 넘어가기 조건 |
+|---|---|---|---|
+| 발견 `discover` | 사용자와 대화해 문제·고객·제안·성공 지표를 정한다 | research, other | 네 섹션이 채워짐 |
+| 검증 `validate` | 비슷한 서비스·가격·실제 불평을 조사해 진행/수정/중단을 권한다 | research, other | 출처 3개 + `결정:` 한 줄 |
+| 만들기 `build` | 범위를 마일스톤으로 쪼개 하나씩 코딩하고 검사로 확인한다 | site, research, other | 모든 마일스톤 통과 |
+| 운영 `operate` | pass 를 돌려 게시·메일·아웃리치를 승인 큐에 올린다 | 전부 | 이 단계에서 보낸 항목 1개 이상 |
+| 배우기 `learn` | 지표를 모아 성공 지표와 비교하고 다음 단계를 권한다 | research, other | 지표 1개 이상 + `다음 단계:` 한 줄 |
 
-### run — pass 한 번 돌리기
+### 발견 — 같이 의논한다
 
-AI 직원은 "pass" 단위로 돌아간다. 한 pass = 리서치 → 초안 → 검증 → 승인 대기. 모든 단계는 체크포인트다.
+- 질문은 **한 번에 하나**. 사용자의 말로 답을 받고, 답하지 않은 내용은 지어내지 않는다. 막연하면 예시 두 개를 들어 고르게 한다.
+- 순서: 누가 불편한가 → 지금은 어떻게 해결하나 → 처음 팔 사람 한 부류 → 무엇을 얼마에 → 성공을 숫자 하나로.
+- 대화가 쌓이면 `.operator/stages/discover.md` 에 정리하고 사용자에게 보여 준다. 운영 단계에서 쓸 브랜드 톤·채널은
+  `.operator/business.md` ([템플릿](assets/templates/business.md))에 같이 적어 둔다.
+
+### 검증 — 할지 말지
+
+- 리서치 pass 를 돌려 `.operator/stages/validate.md` 의 `## 근거` 에 출처 URL 과 함께 적는다. 웹 검색 도구가 있으면 써라.
+- `## 결정` 에 이유와 `결정: 진행|수정|중단` 한 줄. 듣기 좋은 결론보다 근거가 가리키는 쪽을 권해라. 진행 → 만들기,
+  수정 → 발견으로 돌아감, 중단 → 넘어가지 않는다.
+
+### 만들기 — 마일스톤마다 검사로 끝낸다
+
+```bash
+op milestone add "예약 폼과 저장" --test "npm test -- booking"
+op milestone add "사장님 알림 문자" --test "npm test -- notify"
+op milestone done 1          # 검사 명령을 실제로 돌려 exit 0 이면 완료. 실패하면 고치고 다시
+op milestone list
+```
+
+- 코드는 네가 직접 쓴다. 마일스톤 하나에 pass 하나 (`op pass start --goal "마일스톤 1"`, 기본 단계 milestone→test→report).
+- 검사 명령은 실제로 기능을 확인해야 한다. `true`, `echo` 같은 빈 검사는 거부된다. 사람이 단계를 넘길 때 검사 명령 목록을 본다.
+- `.operator/stages/build.md` 의 `## 범위` 에 넣을 것과 뺄 것을 적는다. 결제·로그인처럼 큰 기능은 첫 버전에서 빼자고 권해라.
+- 첫 배포는 `type: site` 초안을 `--action "<배포 명령>"` 과 함께 승인 큐에 올린다. 배포 명령은 가드가 막는다.
+
+### 운영 — pass 로 굴린다
+
+§2 의 pass 를 돌린다. 이 단계에서만 post·email 을 큐에 올릴 수 있다.
+
+### 배우기 — 숫자로 돌아본다
+
+```bash
+op metric add signups 1 --source "관리자 화면" --note "목표 3명"
+op metric list               # 기록한 지표와 자동 집계(보낸 수, 거절 수)
+```
+
+- 숫자는 사용자가 알려 주거나 네가 실제로 확인한 것만 기록한다. 추정치는 `--note` 에 추정이라고 적는다.
+- `.operator/stages/learn.md` 에 발견 단계의 성공 지표와 비교하고 `op feedback` 의 거절 사유를 묶어 `다음 단계: 운영|만들기|발견` 을 권한다.
+
+## 2. pass — 한 번의 작업 단위
+
+한 pass = 단계별 기본 순서(운영: research → draft → queue → report). 모든 단계는 체크포인트다.
 
 ```bash
 op pass start --goal "이번 주 런칭 포스트 3개" --max-steps 6   # 진행 중인 pass 가 있으면 거부됨 → 이어서
-op pass next                                                   # 다음 단계 이름 (research|draft|queue|report)
-#   ...단계 수행...
+op pass next                                                   # 다음 단계 이름
 op pass done research --output .operator/research/2026-10-29-market.md
 op pass done draft    --output .operator/drafts/post-launch-1.md
-op pending add .operator/drafts/post-launch-1.md --type post --channel x --action "curl -X POST https://api.x.com/2/tweets ..."
+op pending add .operator/drafts/post-launch-1.md --type post --channel x
 op pass done queue
 op pass done report  ;  op pass end                             # passes/<id>.md 에 요약 기록
 ```
 
-단계별로 할 일:
-- **research**: 시장·경쟁사·트렌드를 `.operator/research/<날짜>-<주제>.md` 에. 출처 URL 3개 이상 (검증 규칙).
-  웹 검색 도구가 있으면 써라. 없으면 아는 범위에서 쓰되 "출처 부족"을 명시하고 `op pass fail research --reason` 로 기록.
-- **draft**: 먼저 `op feedback` 으로 최근 거절 사유를 읽고 같은 이유로 거절되지 않게 쓴다. 포스트·이메일 초안을
-  `.operator/drafts/` 에 한 파일씩. 형식은 아래 §4. business.md 의 톤·CTA·금지어를 따른다.
+- **research**: `.operator/research/<날짜>-<주제>.md`. 출처 URL 3개 이상. 출처가 부족하면 `op pass fail research --reason`.
+- **draft**: 먼저 `op feedback` 으로 최근 거절 사유를 읽는다. 초안은 `.operator/drafts/` 에 한 파일씩 (§5 형식).
+  business.md 의 톤·CTA·금지어를 따른다.
 - **queue**: 초안마다 `op pending add`. 검증을 통과한 것만 올라간다. 실패하면 **초안을 고쳐라**. 규칙을 완화하려고
-  config.json 을 건드리지 마라 (그건 사용자 결정). 예외는 비어 있는 값을 채우는 것뿐이다 (예: `verify.site.command`).
-  x·threads·webhook 포스트와 이메일은 action 이 `op deliver <id>` 로 자동으로 채워진다(실제 게시는 그 명령이 한다,
-  [references/channels.md](references/channels.md)). 그 밖의 채널은 보낼 명령을 `--action` 으로 반드시 적어 둬라.
-  사람은 그 명령을 보고 승인하고, 승인 뒤에는 **그 명령만** 실행된다.
-- **report**: `op pass end` 가 만드는 요약에 더해, 사용자에게 **승인 대기 목록**과 다음 pass 제안을 3줄로.
-  `op notify` 로 휴대폰에 대기 건수를 알린다(설정이 없으면 조용히 넘어감).
+  config.json 을 건드리지 마라. x·threads·webhook 포스트와 이메일은 action 이 `op deliver <id>` 로 자동으로 채워진다
+  ([references/channels.md](references/channels.md)). 그 밖의 채널은 보낼 명령을 `--action` 으로 적어 둬라.
+- **report**: 사용자에게 승인 대기 목록과 다음 제안을 3줄로. `op notify` 로 휴대폰에 대기 건수를 알린다.
 
-규칙:
-- `--max-steps` 는 원형 서비스의 크레딧 상한에 해당한다. 상한에 닿으면 `op pass end` 하고 멈춘다. 더 하고 싶으면 사용자가 새 pass 를 시킨다.
-- `op pass done` 은 `--output` 경로가 실제로 존재해야 통과한다. 산출물 없이 "했다"고 적을 수 없다.
-- 중간에 실패하면 `op pass fail <step> --reason "..."`. 다음에 같은 단계부터 재개된다. 처음부터 다시 하지 않는다.
-- 세션이 끊겨도 `state.json` 이 남는다. 새 세션은 `op status` → `op pass next` 로 **그 지점에서** 이어 간다.
+규칙: `--max-steps` 에 닿으면 `op pass end` 하고 멈춘다. `op pass done` 은 `--output` 이 실제로 있어야 통과한다.
+실패하면 `op pass fail <step> --reason "..."` 하고, 다음에 같은 단계부터 재개한다. 상세: [references/pass-flow.md](references/pass-flow.md)
 
-자세한 흐름과 예시 세션: [references/pass-flow.md](references/pass-flow.md)
+## 3. 승인과 발송 — 사람이
 
-### approve — 승인은 사람이
+너는 승인하지 못한다. 훅이 `op pending approve/reject`, `op stage advance/back/set`, `op secret set`, `op serve`,
+`op telegram`, `op connect` 를 막고, `.operator/` 의 큐·단계·마일스톤·지표·가드 파일을 도구나 셸로 고치는 것도 막는다.
+이 명령들은 대화형 터미널에서만 동작하므로 네 셸 도구로는 실행되지 않는다. 버그가 아니라 설계다.
 
-너는 승인하지 못한다. 훅이 `op pending approve/reject` 를 막고, 큐 폴더(`.operator/pending|approved|sent|rejected/`)를
-도구로 편집하는 것도, 셸로 옮기거나 덮어쓰는 것(`mv`, `cp`, `>`, `sed -i`, 파이썬 한 줄)도 막는다. approve 명령 자체도
-대화형 터미널에서만 동작하므로 네 셸 도구로는 실행되지 않는다. 이건 버그가 아니라 설계다 ("승인은 당신이").
-
-```bash
-op pending list              # 대기 목록
-op pending show 0003         # 내용
-```
-
-사용자가 "승인해 줘"라고 하면 **네가 approve 명령을 치지 말고**, 사용자가 자기 터미널에서 실행할 명령을 보여줘라:
+사용자가 "승인해 줘"라고 하면 **네가 치지 말고** 사용자가 자기 터미널에서 실행할 명령을 보여 줘라:
 
 ```
-op pending approve 0003                                   # 티켓의 action 그대로 승인
+op pending list ; op pending show 0003
+op pending approve 0003                                   # 기본(발송 방식 human): 승인하는 순간 사람 쪽에서 보낸다
 op pending approve 0004 --action "npm run build && wrangler deploy"   # action 이 없거나 바꿀 때
-op pending reject 0003 --reason "톤이 딱딱함"
+op pending reject 0003 --reason "톤이 딱딱함"              # 사유는 .operator/feedback.md 에 쌓인다
+op telegram                                               # 밖에서 휴대폰으로 승인 (텔레그램 봇)
+op serve --lan                                            # 같은 Wi-Fi 의 휴대폰으로 승인
 ```
 
-휴대폰으로 승인하고 싶다면 사용자가 자기 터미널에서 `op serve --lan` 을 실행해 같은 Wi-Fi 에서 연다
-(1회용 토큰 주소, 너는 실행할 수 없다). 거절 사유는 `.operator/feedback.md` 에 쌓여 다음 초안에 반영된다.
+발송 방식은 `.operator/guard.json` 의 `send_mode` 다 (`op status` 에 보인다).
+- **human (기본)**: 사람이 승인하는 순간 사람이 띄운 프로세스가 action 을 실행한다. 발송 토큰도 그 프로세스만 읽는다.
+  너는 `op send` 를 실행할 수 없다. 보내 달라는 요청에는 "승인하면 바로 나갑니다"라고 안내해라.
+- **agent**: 승인된 티켓을 네가 `op send <id>` 로 실행한다. 실행되는 것은 티켓에 승인된 action 뿐이다.
+  `op send <id> -- <명령>` 은 action 과 같을 때만 실행된다. 실패하면 approved 에 남고, 성공하면 sent/ 로 간다.
 
-승인된 티켓은 `op send <id>` 로 실제 발송·게시·배포한다. 실행되는 것은 티켓에 승인된 action 뿐이다.
-`op send <id> -- <명령>` 처럼 명령을 같이 주면 action 과 같을 때만 실행되고, 다르면 거부된다. 다른 명령을
-보내고 싶으면 새 티켓을 올려 다시 승인받아라. 명령이 실패하면 티켓은 approved 에 남고, 성공하면 sent/ 로 이동한다.
+토큰은 `op secret set <이름>` 으로 사람이 등록한다 (macOS 키체인, 읽을 때마다 허락을 묻는다). 너는 토큰 파일이나
+키체인을 읽지 않는다. 가드가 막는다. 준비 상태는 `op deliver --check` 로만 본다 (값은 나오지 않는다).
+X 는 사람이 `op connect x` 로 한 번 연결하면 만료된 토큰을 자동으로 갱신한다.
 
-```bash
-op send 0003
-```
+## 4. 승인 게이트 — 막히면 이렇게 한다
 
-### status — 현황 보고
+가드는 메일 발송, 소셜 API POST, 외부 URL 로의 POST/PUT/DELETE, `vercel/netlify/wrangler/fly deploy`, `git push`,
+`npm publish`, `supabase db push`, Stripe 결제 생성, 도메인 구매, 재귀 삭제, `git push --force`, `DROP TABLE`,
+비밀값 읽기를 막는다 (전체와 추가 방법: [references/guard-rules.md](references/guard-rules.md)).
 
-`op status` + `op pending list` 결과를 사람 말로 4줄 이내: 진행 중인 pass, 승인 대기 수, 최근 sent, 다음 제안.
-
-## 2. 승인 게이트 — 막히면 이렇게 한다
-
-가드는 다음을 막는다 (전체 목록과 추가 방법: [references/guard-rules.md](references/guard-rules.md)):
-메일 발송, 소셜 API POST, 외부 URL 로의 POST/PUT/DELETE, `vercel/netlify/wrangler/fly deploy`, `git push`,
-`npm publish`, `supabase db push`, Stripe 결제 생성, 도메인 구매, 재귀 삭제(`rm -r`), `git push --force`, `DROP TABLE`.
-
-막혔을 때 올바른 행동은 하나다: 그 결과물을 파일로 만들고 `op pending add <file> --type ... --action "<막힌 명령>"`.
-큐 폴더의 파일을 셸로 옮기거나 고쳐서 상태를 바꾸는 것도 같은 규칙으로 막힌다.
+막혔을 때 올바른 행동은 하나다: 결과물을 파일로 만들고 `op pending add <file> --type ... --action "<막힌 명령>"`.
 우회하려 하지 마라 (다른 셸로 감싸기, 스크립트에 숨기기, 설정 바꾸기 모두 금지). 가드 로그(`.operator/guard.log`)에 남는다.
+도메인 구매와 결제는 승인 큐로도 올리지 않는다. 사용자에게 직접 하라고 안내해라.
 
-도메인 구매와 결제는 승인 큐로도 올리지 않는다. 원형 서비스도 AI 에게 아예 못 하게 했다. 사용자에게 직접 하라고 안내.
-
-## 3. 검증 게이트 — 산출물 타입별 규칙
+## 5. 검증 게이트와 초안 형식
 
 | 타입 | 통과 조건 (기본값, config.json `verify` 에서 조정) |
 |---|---|
@@ -155,54 +186,41 @@ op send 0003
 | post | 채널별 길이: x 280 · threads 500 · instagram 2200 · linkedin 3000, 최소 20자 |
 | email | front matter 에 `to:`, `subject:` 필수, 본문 40~4000자 |
 | research | 출처 URL 3개 이상, 본문 200자 이상 |
-| site | `verify.site.command` 가 exit 0. 비어 있으면 실패한다 → package.json 등에 명백한 빌드 명령이 있으면 그걸 채우고 사용자에게 알려라, 없으면 물어라 |
+| site | `verify.site.command` 가 exit 0. 비어 있으면 실패 → 명백한 빌드 명령이 있으면 채우고 알려라, 없으면 물어라 |
 
-`op verify <file> --type post --channel x` 로 미리 확인할 수 있다. 상세: [references/verify-rules.md](references/verify-rules.md)
+`op verify <file> --type post --channel x` 로 미리 확인한다. 상세: [references/verify-rules.md](references/verify-rules.md)
 
-## 4. 초안 파일 형식
-
-파일 맨 위 `---` 블록에 메타, 그 아래 본문. 큐에 올라갈 때 이 메타가 그대로 티켓 헤더가 된다.
+초안은 맨 위 `---` 블록에 메타, 그 아래 본문. 큐에 올라갈 때 메타가 그대로 티켓 헤더가 된다.
 
 ```markdown
 ---
 type: post
 channel: x
 title: 베타 런칭 알림
-action: curl -X POST https://api.x.com/2/tweets -H "Authorization: Bearer $X_TOKEN" -d @-
 ---
 오늘 Pankeki 베타를 열었습니다. 설명 한 줄만 적으면 따뜻한 팬케이크 아이콘이 나옵니다. https://pankeki.app
 ```
 
-```markdown
----
-type: email
-to: hello@example.com
-subject: Pankeki 베타 초대
----
-안녕하세요, ...
-```
+email 은 `to:`, `subject:` 를 메타에 넣는다. research 는 본문에 `## 요약`, `## 근거`, `## 출처` 를 권장한다.
 
-research 는 `type: research`, 본문에 `## 요약`, `## 근거`, `## 출처` 세 섹션을 권장한다.
+## 6. 모델 라우팅
 
-## 5. 모델 라우팅
-
-분류·요약·태깅·추출처럼 정답이 좁은 일은 로컬 모델(맥미니 Ollama 등)로 보내도 된다.
-판단·초안·코드는 네가 직접 한다. `op llm` 이 이 구분을 강제한다.
+분류·요약·태깅·추출처럼 정답이 좁은 일은 로컬 모델로 보내도 된다. 판단·초안·코드는 네가 직접 한다.
 
 ```bash
 op llm --role summarize --input .operator/research/raw.md "핵심 5줄로"   # 로컬 모델이 있으면 거기로
 op llm --role draft "..."    # → ROUTE=self, exit 3. 네가 직접 써라.
 ```
 
-`ROUTE=self` 가 나오면 네가 한다. 로컬 모델이 없어도 아무것도 깨지지 않는다. 설정: `config.json` `routing`.
 배경: [references/model-routing.md](references/model-routing.md)
 
-## 6. 매일 돌리기
+## 7. 매일 돌리기와 밖에서 승인하기
 
 혼자 돌지 않는다. 매일 돌리려면 운영체제 예약(launchd·cron·작업 스케줄러)으로 에이전트를 비대화형으로 한 번 실행한다.
-예약 실행도 승인 큐까지만 가고 승인은 사람이 한다. 설정: [references/scheduling.md](references/scheduling.md)
+예약 실행도 승인 큐까지만 가고 승인은 사람이 한다. 사용자가 `op telegram` 을 띄워 두면 새 대기 항목이 휴대폰으로 가고
+버튼으로 승인·거절한다. 설정: [references/scheduling.md](references/scheduling.md), [references/channels.md](references/channels.md)
 
-## 7. 이 설계의 근거
+## 8. 이 설계의 근거
 
-왜 이렇게 만들었는지, 참고한 서비스가 실제로 어떻게 돌아가는지, 유사 프로젝트와의 차이는
-[references/foundable-research.md](references/foundable-research.md) 에 있다. 설계를 바꾸고 싶을 때 먼저 읽어라.
+왜 이렇게 만들었는지와 참고한 서비스의 운영 방식은 [references/foundable-research.md](references/foundable-research.md) 에 있다.
+설계를 바꾸고 싶을 때 먼저 읽어라.

@@ -3,7 +3,7 @@
   "hooks": {
     "BeforeTool": [
       {
-        "matcher": "run_shell_command|write_file|replace",
+        "matcher": "run_shell_command|write_file|replace|read_file|read_many_files",
         "hooks": [
           {
             "type": "command",

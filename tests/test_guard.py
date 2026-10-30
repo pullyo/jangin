@@ -100,7 +100,7 @@ class ApprovalQueueIntegrityTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='op queue 한글 ')
         self.project = Path(self.temp.name).resolve()
-        run(['init'], self.project)
+        run(['init', '--stage', 'operate', '--send', 'agent'], self.project)
         (self.project / 'd.md').write_text('---\ntype: post\nchannel: x\naction: echo post-to-x\n---\n오늘 베타를 열었습니다. 지금 써보세요 https://example.com\n', encoding='utf-8')
         (self.project / 'n.md').write_text('---\ntype: post\nchannel: x\n---\n액션 없는 초안입니다. 지금 써보세요 https://example.com\n', encoding='utf-8')
         self.assertEqual(run(['pending', 'add', 'd.md'], self.project).returncode, 0)   # 0001 with action
@@ -182,7 +182,7 @@ class DeliverServeFeedbackTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='op deliver 한글 ')
         self.project = Path(self.temp.name).resolve()
-        run(['init'], self.project)
+        run(['init', '--stage', 'operate', '--send', 'agent'], self.project)
         _Recorder.calls = []
         self.server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), _Recorder)
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
@@ -193,6 +193,7 @@ class DeliverServeFeedbackTests(unittest.TestCase):
 
     def tearDown(self):
         self.server.shutdown()
+        self.server.server_close()
         self.temp.cleanup()
 
     def op(self, *args, env=None):

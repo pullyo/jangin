@@ -1,8 +1,13 @@
 {
   "name": "operator",
-  "description": "적게 하지만 절대 안 어기는 운영 루프. 승인 게이트, 재개 가능한 pass, 검증 게이트, 모델 라우팅.",
+  "description": "아이디어부터 운영까지 같이 가는 AI 직원 루프. 발견 → 검증 → 만들기 → 운영 → 배우기 단계, 사람만 넘기는 단계 이동, 훅으로 막는 승인 게이트, 사람 쪽에서만 보내는 발송, 재개 가능한 pass, 검증 게이트.",
   "license": "MIT",
-  "keywords": ["operator", "approval-gate", "human-in-the-loop", "agent-skills"],
+  "keywords": [
+    "operator",
+    "approval-gate",
+    "human-in-the-loop",
+    "agent-skills"
+  ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Operator",
@@ -10,5 +15,5 @@
     "developerName": "pullyo",
     "category": "Developer Tools"
   },
-  "version": "0.4.0"
+  "version": "0.5.0"
 }

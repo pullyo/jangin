@@ -59,16 +59,17 @@ $ op pass end
 
 에이전트 → 사용자:
   pass 2026-10-29-01 끝. 승인 대기 2건 (0001 x, 0002 threads).
-  터미널에서 `op pending show 0001` 로 보고 `op pending approve 0001` 하면 보낼게요.
+  터미널에서 `op pending show 0001` 로 보고 `op pending approve 0001` 하면 바로 나갑니다.
   다음 pass 제안: 승인된 포스트 반응 보고 답글 초안.
 
 사용자 (자기 터미널): op pending approve 0001
-사용자: 0001 보내
-
-에이전트:
-$ op send 0001          # 티켓에 승인된 action(curl -X POST https://api.x.com/2/tweets …)만 실행된다
-  exit 0 → sent
+  [send 0001] op deliver 0001
+  x 게시 완료 id=…
+  exit 0 → sent          # 발송 방식 human(기본): 승인한 터미널에서 바로 나간다. 토큰도 이 프로세스만 읽는다
 ```
+
+발송 방식이 agent 인 프로젝트에서는 승인 뒤 사용자가 "0001 보내"라고 하면 에이전트가 `op send 0001` 을 실행한다.
+그때도 티켓에 승인된 action 만 실행된다.
 
 ## 세션이 끊긴 뒤
 

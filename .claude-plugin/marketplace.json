@@ -1,18 +1,26 @@
 {
   "name": "operator-skill",
-  "owner": { "name": "pullyo", "url": "https://github.com/pullyo" },
+  "owner": {
+    "name": "pullyo",
+    "url": "https://github.com/pullyo"
+  },
   "metadata": {
-    "description": "operator — 승인 게이트·재개·검증 게이트·모델 라우팅을 강제하는 1인 개발자용 운영 플러그인",
-    "version": "0.4.0"
+    "description": "operator — 아이디어부터 운영까지 단계·승인·재개·검증을 강제하는 1인 개발자용 AI 직원 플러그인",
+    "version": "0.5.0"
   },
   "plugins": [
     {
       "name": "operator",
       "source": "./",
-      "description": "적게 하지만 절대 안 어기는 운영 루프. 밖으로 나가는 명령은 훅이 막고 승인 큐로 보낸다. 끊겨도 state.json 에서 재개.",
-      "version": "0.4.0",
+      "description": "아이디어를 같이 다듬고, 만들고, 출시해서 굴린다. 단계 이동과 발송은 사람만 하고, 밖으로 나가는 명령은 훅이 막는다.",
+      "version": "0.5.0",
       "category": "productivity",
-      "keywords": ["operator", "approval-gate", "human-in-the-loop", "agent-skills"]
+      "keywords": [
+        "operator",
+        "approval-gate",
+        "human-in-the-loop",
+        "agent-skills"
+      ]
     }
   ]
 }

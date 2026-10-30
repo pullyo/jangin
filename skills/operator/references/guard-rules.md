@@ -10,7 +10,7 @@
 
 1. 훅 입력의 `cwd` (Claude Code·Codex 가 세션 작업 폴더를 넘긴다. 없으면 훅 프로세스의 작업 폴더)
 2. 명령 안의 `cd` / `pushd` / `Set-Location` 대상 (연속된 상대 `cd` 도 따라간다), `git -C <폴더>`, `--cwd` / `--prefix` / `--dir`
-3. Write·Edit·apply_patch 대상 파일이 있는 폴더
+3. Write·Edit·Read·apply_patch 대상 파일이 있는 폴더
 
 각 위치에서 위로 올라가며 `.operator/` 를 찾는다. 그래서 다른 폴더에서 연 세션이 `cd 프로젝트 && wrangler deploy`
 처럼 들어가 실행하는 명령도 막힌다. `$HOME`, `%USERPROFILE%` 같은 변수가 든 경로는 해석하지 않는다(그런 명령은
@@ -25,20 +25,24 @@
 | 게시 | `curl` → twitter/x/facebook/threads/linkedin/instagram API, `curl -X POST/PUT/DELETE/PATCH` 외부 URL (localhost 제외) |
 | 배포 | `vercel/netlify/wrangler/fly/railway/render deploy|publish|up`, `vercel --prod`, `supabase db push / functions deploy / secrets set`, `git push` (`git -C <폴더> push`, `git -c … push` 포함), `npm publish` |
 | 결제·도메인 | `stripe ... charges/payment_intents/... create/confirm/capture`, 레지스트라 `register/purchase/buy` |
+| 비밀값 (`SECRET_COMMANDS`, allow 로도 못 풂) | `~/.config/operator/` 를 언급하는 모든 명령, `security find-generic-password/dump-keychain/export`, `printenv`, `env` 출력. Read 도구로 그 폴더를 여는 것도 막는다 |
 | 파괴 | 재귀 삭제 `rm -r`/`--recursive` (`.operator/tmp` 아래는 제외; 단일 파일 `rm -f` 는 통과), `git push --force`, `git branch -D`, `git reset --hard`, `DROP TABLE/DATABASE/SCHEMA`, `supabase projects delete` |
 
 ## 사람 전용 명령 (`human_only_commands`)
 
-`op pending approve`, `op pending reject`, `op approve`, `op reject`, `op serve`, `op deliver`. 에이전트 세션에선 훅이 막는다.
+`op pending approve`, `op pending reject`, `op approve`, `op reject`, `op serve`, `op deliver`, `op telegram`, `op connect`,
+`op stage advance/back/set`, `op secret set/rm`. 에이전트 세션에선 훅이 막는다.
 `op deliver` 는 `op send` 가 승인된 action 으로 실행할 때만 동작한다(직접 실행하면 거부).
 사람은 훅이 없는 자기 터미널에서 실행한다. Claude 데스크톱 앱이라면 Terminal 패널.
-훅과 별개로 approve/reject 명령 자체가 **대화형 터미널(TTY)** 을 요구한다. 에이전트의 셸 도구에는 터미널이 없어
+훅과 별개로 이 명령들 자체가 **대화형 터미널(TTY)** 을 요구한다. 에이전트의 셸 도구에는 터미널이 없어
 스크립트를 복사해 돌려도 거부된다. 자동화에서 꼭 필요하면 사람이 `OPERATOR_ALLOW_NONINTERACTIVE_APPROVE=1` 을 직접 설정한다.
 
 ## 보호 경로 (`deny_paths`) — Write/Edit/apply_patch 대상
 
-`.operator/pending/`, `.operator/approved/`, `.operator/sent/`, `.operator/rejected/`, `.operator/guard.json`.
+`.operator/pending/`, `.operator/approved/`, `.operator/sent/`, `.operator/rejected/`, `.operator/guard.json`,
+`.operator/stage.json`, `.operator/milestones.json`, `.operator/metrics.jsonl`.
 큐는 `op pending add` 로만 들어가고, 상태 변경은 `op pending approve/reject` 와 `op send` 로만 일어난다.
+단계는 `op stage`, 마일스톤은 `op milestone`, 지표는 `op metric` 으로만 바뀐다.
 
 셸 명령도 같은 규칙이다. 명령이 큐 경로를 언급하면 읽기 전용 명령(`cat`, `ls`, `head`, `grep`, `find`, `diff`, `jq` 등)만
 통과하고, `mv`/`cp`/`>`/`sed -i`/파이썬 한 줄 같은 쓰기는 전부 막힌다. `.operator` 폴더 자체를 옮기거나 지우는 것도 막힌다.
@@ -53,6 +57,7 @@
 
 ```json
 {
+  "send_mode": "human",
   "deny_commands": ["\\bmy-cli\\s+post\\b"],
   "human_only_commands": [],
   "deny_paths": ["content/published/"],
@@ -60,7 +65,8 @@
 }
 ```
 
-이 파일 자체가 보호 경로라 에이전트는 못 고친다. 사용자가 편집한다.
+이 파일 자체가 보호 경로라 에이전트는 못 고친다. 사용자가 편집한다. `send_mode` 는 human(사람이 승인하는 순간 사람 쪽에서
+발송) 또는 agent(승인 뒤 에이전트가 `op send`). 자세한 차이는 [channels.md](channels.md).
 
 ## 훅 입력 형식 (도구별)
 

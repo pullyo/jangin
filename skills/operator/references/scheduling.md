@@ -63,6 +63,11 @@ OPERATOR_NTFY_SERVER=https://ntfy.example.com
 
 ## 휴대폰으로 승인하기
 
-알림을 받으면 컴퓨터 터미널에서 `op serve --lan` 을 실행해 같은 Wi-Fi 의 휴대폰으로 주소를 연다.
-주소에 1회용 토큰이 들어 있고, 서버를 끄면 무효가 된다. HTTPS 가 아니므로 집·사무실처럼 믿을 수 있는 네트워크에서만 쓴다.
-밖에서 승인하려면 Tailscale 같은 사설 VPN 으로 컴퓨터에 붙어서 같은 주소를 연다(포트를 인터넷에 열지 않는다).
+밖에서도 승인하려면 `op telegram` 을 띄워 둔다 ([channels.md](channels.md)). 예약 실행이 큐에 올린 항목이 바로 카드로 온다.
+발송 방식이 human 이면 버튼을 누르는 순간 컴퓨터에서 발송된다. 컴퓨터가 켜져 있어야 한다.
+
+로그인할 때 자동으로 띄우려면 launchd 로 `op telegram` 을 실행하되, 터미널이 없으므로 사람이 plist 의
+`EnvironmentVariables` 에 `OPERATOR_ALLOW_NONINTERACTIVE_APPROVE=1` 을 직접 넣는다. 이 값은 "이 프로세스는 사람이 띄웠다"는
+선언이라 에이전트 예약 작업(pass 를 도는 plist)에는 절대 넣지 않는다. 키체인 허락은 처음 시작할 때 한 번 묻는다.
+
+같은 Wi-Fi 라면 `op serve --lan` 도 된다. 1회용 토큰 주소이고 HTTPS 가 아니므로 믿을 수 있는 네트워크에서만 쓴다.
