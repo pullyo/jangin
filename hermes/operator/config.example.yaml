@@ -11,7 +11,8 @@ plugins:
 hooks:
   pre_tool_call:
     - matcher: "terminal|write_file|patch|read_file|execute_code"
-      command: "python3 -I \"PLUGIN_DIR/skill/scripts/op.py\" guard --format hermes"
+      # 파이썬은 절대 경로로 (데스크톱 앱이 띄운 게이트웨이는 PATH 가 최소라 /usr/bin/python3 로 잡힐 수 있다)
+      command: "/usr/local/bin/python3 -I \"PLUGIN_DIR/skill/scripts/op.py\" guard --format hermes"
       timeout: 20
       fail_closed: true
 

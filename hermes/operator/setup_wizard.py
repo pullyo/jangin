@@ -60,9 +60,33 @@ def save_json(path, data):
     os.replace(tmp, path)
 
 
+# 셸 훅은 게이트웨이가 셸 없이 실행한다. 데스크톱 앱이 띄운 게이트웨이는 PATH 가 최소라서 `python3` 가
+# macOS 의 /usr/bin/python3 (Xcode 라이선스 동의 전에는 실행 안 됨) 로 잡힐 수 있고, fail_closed 훅이 실패하면
+# 모든 도구 호출이 막힌다. 그래서 실제로 실행되는 파이썬의 절대 경로를 쓴다. 버전이 바뀌어도 남는 링크를 먼저 고른다.
+PYTHON_CANDIDATES = ("/usr/local/bin/python3", "/opt/homebrew/bin/python3",
+                     "/Library/Frameworks/Python.framework/Versions/Current/bin/python3", "/usr/bin/python3")
+
+
+def stable_python():
+    env_py = os.environ.get("OPERATOR_PYTHON")
+    for py in ([env_py] if env_py else []) + list(PYTHON_CANDIDATES) + [sys.executable]:
+        if py and os.path.isfile(py) and os.access(py, os.X_OK):
+            try:
+                if subprocess.run([py, "-I", "-c", "import json, re"], capture_output=True, timeout=20).returncode == 0:
+                    return py
+            except (OSError, subprocess.TimeoutExpired):
+                continue
+    return None
+
+
 def guard_command():
     op_py = next((os.path.abspath(p) for p in OP_PY_CANDIDATES if os.path.isfile(p)), None)
-    return f'python3 -I "{op_py}" guard --format hermes' if op_py else None
+    py = stable_python()
+    return f'"{py}" -I "{op_py}" guard --format hermes' if op_py and py else None
+
+
+def is_operator_guard(cmd):
+    return isinstance(cmd, str) and "op.py" in cmd and "guard --format hermes" in cmd
 
 
 # ---------------------------------------------------------------- 화면: Hermes 마법사 부품
@@ -147,6 +171,17 @@ class HermesBackend:
         c = load_config()
         hooks = c.get("hooks") if isinstance(c.get("hooks"), dict) else {}
         lst = hooks.get("pre_tool_call") if isinstance(hooks.get("pre_tool_call"), list) else []
+        # 예전 형식(맨 `python3`)의 operator 훅은 지우고 새 명령 하나만 남긴다
+        stale = [h for h in lst if isinstance(h, dict) and is_operator_guard(h.get("command")) and h.get("command") != cmd]
+        if stale:
+            lst = [h for h in lst if h not in stale]
+            hooks["pre_tool_call"], c["hooks"] = lst, hooks
+            save_config(c)
+            for h in stale:
+                try:
+                    shell_hooks.revoke(h["command"]) if hasattr(shell_hooks, "revoke") else None
+                except Exception:
+                    pass
         if not any(isinstance(h, dict) and h.get("command") == cmd for h in lst):
             lst.append({"matcher": "terminal|write_file|patch|read_file|execute_code", "command": cmd, "timeout": 20, "fail_closed": True})
             hooks["pre_tool_call"], c["hooks"] = lst, hooks
