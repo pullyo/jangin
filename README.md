@@ -2,10 +2,11 @@
 
 **English** · [한국어](README.ko.md)
 
-**An AI employee for solo founders that goes from idea to operations, does little, and never breaks its rules.**
-Your coding agent talks an idea through with you, checks whether it is worth building, builds it milestone by milestone,
-launches it and runs the day-to-day (research → drafts → posting, emailing, deploying), then looks at the numbers and
-suggests what to do next. Every move to the next stage and every action that leaves your machine goes through you.
+**A dedicated AI partner that helps you shape an idea, then develop it and manage its deployment, on your own machine.**
+Shaping the idea comes first: your coding agent asks one question at a time, pushes back, researches and helps you decide
+whether it is worth building. Then it builds the approved plan milestone by milestone and ships it through an approval queue,
+and keeps announcing it and reading the numbers to suggest what to do next. Every move to the next stage and every action
+that leaves your machine goes through you. Goal and roadmap: [VISION.md](VISION.md).
 
 operator is an [Agent Skill](https://agentskills.io) plus a small, dependency-free Python CLI (`op`). The same folder works in
 Claude Code, Codex CLI, Cursor, Gemini CLI and other tools that read the Agent Skills format.
