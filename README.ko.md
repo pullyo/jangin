@@ -81,7 +81,7 @@ operator 는 [Agent Skill](https://agentskills.io) 과 의존성 없는 작은 �
 # 어떤 도구든 수동 설치: ~/.claude, ~/.codex, ~/.cursor, ~/.gemini 중 있는 곳에 링크
 git clone https://github.com/pullyo/operator-skill
 sh operator-skill/skills/operator/install.sh
-sh operator-skill/skills/operator/install.sh --print-hooks   # Claude Code / Codex / Cursor / Gemini CLI 용 훅 설정
+sh operator-skill/skills/operator/install.sh --print-hooks   # Claude Code / Codex / Cursor / Gemini CLI / Hermes 용 훅 설정
 ```
 
 훅 없이도 스킬은 동작하지만, 그때 차단은 보장이 아니라 지시 수준이 됩니다.
@@ -118,6 +118,36 @@ op connect x                         # 그다음 X (채널 설정 참고), Threa
 op telegram                          # 선택: 휴대폰으로 승인
 ```
 
+## Hermes 에서 쓰기 (전용 사업 비서)
+
+[Hermes Agent](https://github.com/NousResearch/hermes-agent) 를 엔진으로 쓰면 터미널 없이 앱과 메신저로 씁니다.
+Hermes 코드는 고치지 않고, 플러그인·스킬·성격(SOUL.md)만 넣습니다. Hermes 0.22.5 에서 확인했습니다.
+
+```bash
+git clone https://github.com/pullyo/operator-skill
+sh operator-skill/hermes/operator/install.sh      # 프로필 'operator' 를 만들고 플러그인·스킬·성격을 넣는다
+# 쓰던 기본 Hermes 를 그대로 Operator 로 쓰려면: sh operator-skill/hermes/operator/install.sh --home ~/.hermes
+operator setup                                    # 한국어 설정 마법사
+```
+
+`operator setup` 은 여섯 단계를 차례로 묻습니다: 모델 로그인(필요하면 Hermes 모델 설정으로), operator 플러그인 켜기,
+프로젝트 폴더, 승인 방식(데스크톱+메신저 또는 메신저만), 휴대폰 승인용 메신저와 허용 사용자, 플러그인이 꺼져도 막는
+두 번째 잠금(셸 훅). 원래 Hermes 마법사는 `operator setup --hermes`, 한 단계만은 `operator setup model` 처럼 씁니다.
+
+대화창(Desktop, 또는 연결한 텔레그램 등)에서:
+
+| 명령 | 하는 일 |
+|---|---|
+| `/idea 동네 빵집 예약 페이지` | 프로젝트를 만들고 발견 단계 시작 |
+| `/project` · `/stage` | 상태, 지금 단계와 넘어가기 조건 |
+| `/advance` · `/back 발견 고객이 너무 넓다` | 단계 이동 (나만) |
+| `/inbox` · `/ok 0003` · `/reject 0003 너무 딱딱함` | 승인 대기 확인과 결정 (나만). 승인하면 플러그인이 바로 보냅니다 |
+| `/setup` | 프로젝트 폴더, 지금 프로젝트, `/setup unlock` (키체인 토큰 읽기) |
+
+Hermes 내장 `/approve` 는 위험 명령 허락용이라 operator 의 `/ok` 와 다릅니다. `/idea` 로 만든 프로젝트는 터미널 승인을 받지 않고
+Hermes 에서 친 명령만 받습니다. 휴대폰 메신저에서 친 명령만 받으려면 `.operator/guard.json` 에 `"human_via": ["messenger"]`.
+설계와 확인한 것·아직인 것: [docs/hermes-design.md](docs/hermes-design.md).
+
 ## 명령
 
 | 명령 | 누가 | 용도 |
@@ -150,8 +180,9 @@ op telegram                          # 선택: 휴대폰으로 승인
   재귀 삭제, `git push --force`, `DROP TABLE`.
 - 큐(`.operator/pending|approved|sent|rejected`)와 단계·마일스톤·지표·가드 파일은 `op` 로만 바뀝니다. 편집 도구나
   `mv`/`cp`/`>`/`sed -i`/파이썬 한 줄로 고치는 것은 막히고, 읽기는 허용됩니다.
-- 승인·거절, 단계 이동, 비밀값 등록, 계정 연결, 승인 서버 시작은 대화형 터미널이 없으면 실행되지 않습니다.
-  스크립트를 복사해 돌려도 에이전트는 실행할 수 없습니다.
+- 승인·거절, 단계 이동, 비밀값 등록, 계정 연결, 승인 서버 시작은 사람의 결정 경로(authority)를 거쳐야 실행됩니다.
+  터미널에서는 대화형 터미널(TTY)이 있어야 하고, Hermes 에서는 내가 친 `/approve` 같은 명령을 플러그인이 받아 처리합니다.
+  어느 경로로 결정했는지는 티켓(`decided_by`)과 단계 기록(`by`)에 남습니다. 에이전트를 사람으로 바꿔 주는 환경 변수는 없습니다.
 - 기본 발송 방식(human)에서는 에이전트가 `op send` 를 아예 실행할 수 없고, 승인된 action 은 내 프로세스에서 실행됩니다.
   agent 방식에서도 `op send` 는 승인된 티켓에 기록된 명령만 실행합니다.
 - `~/.config/operator/` 읽기, `security find-generic-password`, `printenv` 같은 명령은 Read 도구까지 포함해 막힙니다.
@@ -161,6 +192,11 @@ op telegram                          # 선택: 휴대폰으로 승인
 
 **막지 못하는 것** — 알아두세요:
 
+- **터미널 확인은 증명이 아니라 실수 방지입니다.** 에이전트의 셸 도구에는 터미널이 없어서 보통의 호출은 막히지만,
+  가짜 터미널(`script -q /dev/null op …`)이나 스크립트 파일로 감싸면 TTY 검사와 가드를 통과할 수 있습니다(이 맥에서 확인).
+  같은 사용자 권한으로 도는 에이전트가 작정하고 우회하는 것까지 막으려면 Hermes 메신저 경로만 받도록
+  `.operator/guard.json` 에 `"human_via": ["messenger"]` 를 두고, 실제 배포 계정에는 격리 등급 2(docker)를 씁니다
+  ([docs/hermes-design.md](docs/hermes-design.md) 4절).
 - 훅을 지원하지 않는 도구에서는 규칙이 지시로만 전달됩니다. 다만 키체인 허락 창과 사람 쪽 발송은 그때도 토큰을 지킵니다.
 - 가드는 명령 문자열을 읽습니다. 변수로 만든 경로(`cd $HOME/x`)는 세션 폴더 기준으로만 판단하고,
   `.operator/` 가 있는 폴더에 닿는 호출에만 작동합니다.
@@ -182,6 +218,8 @@ operator-skill/
 ├── .claude-plugin/        Claude Code 플러그인 + 마켓플레이스 매니페스트
 ├── .codex-plugin/         Codex 플러그인 매니페스트
 ├── hooks/hooks.json       Claude Code 플러그인 훅 (승인 게이트)
+├── hermes/operator/       Hermes 플러그인 (슬래시 명령, 가드 훅, SOUL.md, install.sh)
+├── docs/                  설계 (hermes-design.md)
 ├── tests/                 실제 `op` 프로세스를 돌리는 종단 테스트
 └── skills/operator/       스킬 본체 (Agent Skills 형식)
     ├── SKILL.md           에이전트가 읽는 문서

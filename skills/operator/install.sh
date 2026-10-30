@@ -43,10 +43,10 @@ if [ -n "$PROJECT" ]; then
     echo "  i 훅을 못 쓰는 도구를 위해 $HERE/assets/hooks/AGENTS.md.snippet 을 $P/AGENTS.md 에 붙여 넣어라."; }
 else
   [ -z "$TARGETS" ] && {
-    for t in claude codex cursor gemini; do [ -d "$HOME/.$t" ] && TARGETS="$TARGETS,$t"; done
+    for t in claude codex cursor gemini hermes; do [ -d "$HOME/.$t" ] && TARGETS="$TARGETS,$t"; done
     TARGETS=${TARGETS#,}
   }
-  [ -z "$TARGETS" ] && { echo "설치된 도구를 못 찾았다. --targets claude,codex,cursor,gemini 로 지정해라."; exit 1; }
+  [ -z "$TARGETS" ] && { echo "설치된 도구를 못 찾았다. --targets claude,codex,cursor,gemini,hermes 로 지정해라."; exit 1; }
   echo "사용자 레벨 설치: $TARGETS"
   for t in $(echo "$TARGETS" | tr ',' ' '); do
     case "$t" in
@@ -54,6 +54,7 @@ else
       codex)  place "$HOME/.codex/skills/operator" ;;
       cursor) place "$HOME/.cursor/skills/operator" ;;
       gemini) place "$HOME/.gemini/skills/operator" ;;
+      hermes) place "$HOME/.hermes/skills/operator" ;;   # Hermes Agent (플러그인은 hermes/operator/install.sh)
       agents) place "$HOME/.agents/skills/operator" ;;
       *) echo "  ? 모르는 타깃 $t" ;;
     esac
@@ -66,10 +67,10 @@ echo "다음: 승인 게이트를 100% 로 만들려면 훅을 건다.  sh \"$HE
 
 echo
 echo "================ 훅 설정 (OPERATOR_HOME 을 채운 것) ================"
-for f in claude-code.settings.json codex.hooks.json cursor.hooks.json gemini.settings.json; do
+for f in claude-code.settings.json codex.hooks.json cursor.hooks.json gemini.settings.json hermes.config.yaml; do
   echo
   echo "---- $f"
-  sed "s#OPERATOR_HOME#$HERE#g" "$HERE/assets/hooks/$f" | grep -v '"_comment"'
+  sed "s#OPERATOR_HOME#$HERE#g" "$HERE/assets/hooks/$f" | grep -v '"_comment"' | grep -v '^#'
 done
 echo
 echo "붙일 곳:"
@@ -77,4 +78,5 @@ echo "  Claude Code : ~/.claude/settings.json  (또는 프로젝트 .claude/sett
 echo "  Codex CLI   : ~/.codex/hooks.json      (또는 프로젝트 .codex/hooks.json)"
 echo "  Cursor      : ~/.cursor/hooks.json     (또는 프로젝트 .cursor/hooks.json)"
 echo "  Gemini CLI  : ~/.gemini/settings.json  (또는 프로젝트 .gemini/settings.json) 의 \"hooks\" 에 합치기"
+echo "  Hermes      : ~/.hermes/config.yaml 의 hooks 에 합치기 (처음 실행 때 훅을 믿을지 묻는다). 설명: assets/hooks/hermes.config.yaml"
 echo "확인: 프로젝트에서 op init 후, 에이전트에게 'git push 해' 라고 시켜 보면 막혀야 한다."

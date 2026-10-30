@@ -47,6 +47,8 @@ operator 의 중심은 "무엇을 만들지 같이 정하는 것"이다. 개발�
                           승인 큐 ──▶ 사람이 승인 ──▶ 상시 프로세스가 실행
 ```
 
+일반 사용자용 기본 경로는 Hermes Agent 위에서 도는 형태로 잡았다. 설계: [docs/hermes-design.md](docs/hermes-design.md).
+
 ## 로드맵 (이 목표 기준)
 
 1. **구상 강화**

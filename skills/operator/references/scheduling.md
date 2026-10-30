@@ -66,8 +66,8 @@ OPERATOR_NTFY_SERVER=https://ntfy.example.com
 밖에서도 승인하려면 `op telegram` 을 띄워 둔다 ([channels.md](channels.md)). 예약 실행이 큐에 올린 항목이 바로 카드로 온다.
 발송 방식이 human 이면 버튼을 누르는 순간 컴퓨터에서 발송된다. 컴퓨터가 켜져 있어야 한다.
 
-로그인할 때 자동으로 띄우려면 launchd 로 `op telegram` 을 실행하되, 터미널이 없으므로 사람이 plist 의
-`EnvironmentVariables` 에 `OPERATOR_ALLOW_NONINTERACTIVE_APPROVE=1` 을 직접 넣는다. 이 값은 "이 프로세스는 사람이 띄웠다"는
-선언이라 에이전트 예약 작업(pass 를 도는 plist)에는 절대 넣지 않는다. 키체인 허락은 처음 시작할 때 한 번 묻는다.
+`op telegram` 은 터미널에서 띄운다(키체인 허락도 그때 한 번 묻는다). 0.6 부터 launchd 로 자동으로 띄우는 방법은 없다:
+0.5 의 `OPERATOR_ALLOW_NONINTERACTIVE_APPROVE=1` 은 에이전트도 설정할 수 있는 값이라 없앴다. 항상 켜 둔 승인 창구가
+필요하면 Hermes 게이트웨이(플러그인의 `/approve`)를 쓴다 ([docs/hermes-design.md](../../../docs/hermes-design.md)).
 
 같은 Wi-Fi 라면 `op serve --lan` 도 된다. 1회용 토큰 주소이고 HTTPS 가 아니므로 믿을 수 있는 네트워크에서만 쓴다.

@@ -91,6 +91,8 @@ DEFAULT_GUARD = {
         r"\bop(\.py)?\s+(serve|deliver|telegram|connect)\b",
         r"\bop(\.py)?\s+stage\s+(advance|back|set)\b",
         r"\bop(\.py)?\s+secret\s+(set|rm)\b",
+        # 파이썬으로 op 모듈의 사람 경로를 직접 부르는 것 (플러그인만 쓴다). 스크립트 파일 안은 못 본다: Authority 주석 참고.
+        r"\b(?:Authority|pending_decide|stage_move|secret_store|secret_remove|set_status)\s*\(",
     ],
     # 에이전트가 직접 쓰면 안 되는 경로 (Write/Edit/apply_patch). 큐는 op 명령으로만 건드린다.
     "deny_paths": [
@@ -118,9 +120,84 @@ def now():
     return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
 
 
+class OpError(Exception):
+    """op 의 함수 API 가 내는 오류. CLI 는 메시지를 stderr 에 쓰고 code 로 끝난다."""
+
+    def __init__(self, msg, code=1):
+        super().__init__(msg)
+        self.msg, self.code = msg, code
+
+
 def die(msg, code=1):
-    sys.stderr.write(f"op: {msg}\n")
-    sys.exit(code)
+    raise OpError(msg, code)
+
+
+# ---------------------------------------------------------------- authority (사람의 결정이 어느 경로로 왔나)
+# 승인·거절, 단계 이동, 비밀값 등록은 Authority 를 받아야만 실행된다. 경로마다 증명의 세기가 다르다.
+#
+#   terminal   op 를 대화형 터미널에서 실행했다 (op telegram/serve 처럼 터미널에서 띄운 프로세스 안의 버튼 포함).
+#              에이전트의 일반적인 셸 호출은 막지만 증명은 아니다. 가짜 터미널(`script -q /dev/null op …`)이나
+#              스크립트 파일로 감싼 호출은 통과할 수 있다. 실수 방지 장치로 본다.
+#   local      Hermes 플러그인이 Desktop·TUI·CLI 화면에서 친 명령을 받았다. 이 화면들은 같은 사용자 권한의 로컬
+#              소켓(slash.exec)으로 명령을 보내므로, 에이전트의 터미널 명령도 원리상 흉내 낼 수 있다. terminal 과 같은 세기.
+#   messenger  Hermes 게이트웨이가 텔레그램·디스코드 같은 메신저에서 허용된 사용자의 메시지로 받은 명령. 사용자 ID 는
+#              메신저 서버가 보증하고, 에이전트는 사용자 계정으로 메시지를 보낼 수 없다. 지금 가장 강한 경로다.
+#
+# 세 경로 모두 같은 사용자 권한으로 도는 에이전트가 파이썬으로 이 모듈을 가져와 Authority 를 만드는 것까지는 막지 못한다.
+# 그건 격리 등급 2(docker, .operator 일부 읽기 전용)가 막는다.
+#
+# 프로젝트는 guard.json 의 human_via 로 받을 경로를 고른다. 기본은 셋 다. Hermes 로 만든 프로젝트는
+# ["local", "messenger"] (터미널 끔), 엄격하게는 ["messenger"].
+AUTHORITY_KINDS = ("terminal", "local", "messenger")
+
+
+class Authority:
+    def __init__(self, kind, who=""):
+        if kind not in AUTHORITY_KINDS:
+            raise ValueError(f"모르는 authority: {kind}")
+        self.kind, self.who = kind, " ".join(str(who).split())[:80]
+
+    @property
+    def label(self):
+        return self.kind + (f":{self.who}" if self.who else "")
+
+    @classmethod
+    def terminal(cls, who=""):
+        """대화형 터미널이면 terminal authority, 아니면 OpError(7)."""
+        if not (sys.stdin.isatty() and sys.stdout.isatty()):
+            raise OpError("이 명령은 사람이 대화형 터미널에서만 실행한다 (에이전트의 셸 도구에는 터미널이 없다). "
+                          "사용자에게 무엇을 왜 실행해야 하는지 보여 주고 자기 터미널에서 직접 실행해 달라고 요청해라.", 7)
+        return cls("terminal", who)
+
+    def __repr__(self):
+        return f"Authority({self.label})"
+
+
+def human_via(od):
+    """이 프로젝트가 받는 사람 경로. guard.json(에이전트가 쓸 수 없는 파일)에 둔다."""
+    via = load_json(os.path.join(od, "guard.json"), {}).get("human_via") if od else None
+    via = [v for v in (via or AUTHORITY_KINDS) if v in AUTHORITY_KINDS]
+    return via or list(AUTHORITY_KINDS)
+
+
+def human_hint(od, cli, slash):
+    """사람에게 부탁할 명령. 터미널 경로를 끈 프로젝트(Hermes)는 슬래시 명령으로 안내한다."""
+    return f"`{cli}` (자기 터미널)" if "terminal" in human_via(od) else f"Hermes 에서 `{slash}`"
+
+
+def require_human(od, authority, what):
+    if not isinstance(authority, Authority):
+        raise OpError(f"{what}: 사람의 결정이 필요하다.", 7)
+    if authority.kind not in human_via(od):
+        raise OpError(f"{what}: 이 프로젝트는 {', '.join(human_via(od))} 경로로만 사람의 결정을 받는다 "
+                      f"(guard.json human_via). 지금 경로: {authority.kind}.", 7)
+    return authority
+
+
+def terminal_authority(od=None, what="이 명령"):
+    """CLI 의 사람 전용 명령 입구. 대화형 터미널인지, 프로젝트가 터미널 경로를 받는지 확인한다."""
+    auth = Authority.terminal()
+    return require_human(od, auth, what) if od else auth
 
 
 def find_root(start=None):
@@ -135,8 +212,8 @@ def find_root(start=None):
         d = parent
 
 
-def op_dir(required=True):
-    root = find_root()
+def op_dir(required=True, start=None):
+    root = find_root(start)
     if root is None:
         if required:
             die("여기엔 .operator/ 가 없다. 먼저 `op init` 을 실행해라.", 2)
@@ -209,19 +286,16 @@ def slugify(s, n=40):
 
 
 # ---------------------------------------------------------------- init / status
-def cmd_init(args):
-    """op init [--stage discover|validate|build|operate|learn] [--send human|agent]
-    단계와 발송 방식은 처음 만들 때만 정한다. 그 뒤로는 사람이 `op stage set`, guard.json 으로 바꾼다."""
-    opts = kv(args)
-    root = os.getcwd()
+def init_project(root, stage=None, send_mode=None, human_via_kinds=None):
+    """root/.operator 를 만든다. 이미 있으면 빠진 것만 채우고 단계·발송 방식·human_via 는 바꾸지 않는다.
+    (od, [참고 메시지]) 를 돌려준다."""
     od = os.path.join(root, OP_DIR_NAME)
     first = not os.path.isdir(od)
-    stage = opts.get("stage") or "discover"
-    if stage not in STAGES:
+    if (stage or "discover") not in STAGES:
         die(f"모르는 단계: {stage} ({', '.join(STAGE_ORDER)})")
-    send_mode = opts.get("send") or "human"
-    if send_mode not in ("human", "agent"):
+    if (send_mode or "human") not in ("human", "agent"):
         die("--send 는 human 또는 agent")
+    notes = []
     for sub in ("pending", "approved", "sent", "rejected", "passes", "research", "drafts", "tmp", "stages"):
         os.makedirs(os.path.join(od, sub), exist_ok=True)
     cfg_path = os.path.join(od, "config.json")
@@ -231,16 +305,30 @@ def cmd_init(args):
         save_json(cfg_path, cfg)
     gpath = os.path.join(od, "guard.json")
     if not os.path.exists(gpath):
-        save_json(gpath, {"send_mode": send_mode, "deny_commands": [], "human_only_commands": [], "deny_paths": [], "allow_commands": []})
+        g = {"send_mode": send_mode or "human", "deny_commands": [], "human_only_commands": [], "deny_paths": [], "allow_commands": []}
+        if human_via_kinds:
+            g["human_via"] = [k for k in human_via_kinds if k in AUTHORITY_KINDS]
+        save_json(gpath, g)
     if not os.path.exists(stage_path(od)):
-        if first or opts.get("stage"):
-            save_json(stage_path(od), {"stage": stage, "started": now(), "history": [{"t": now(), "to": stage, "by": "init"}]})
-    elif opts.get("stage"):
-        print(f"참고: 단계는 이미 정해져 있다 ({current_stage(od)}). 바꾸는 건 사람이 `op stage set` 으로 한다.")
+        if first or stage:
+            save_json(stage_path(od), {"stage": stage or "discover", "started": now(),
+                                       "history": [{"t": now(), "to": stage or "discover", "by": "init"}]})
+    elif stage:
+        notes.append(f"참고: 단계는 이미 정해져 있다 ({current_stage(od)}). 바꾸는 건 사람이 `op stage set` 으로 한다.")
     gi = os.path.join(od, ".gitignore")
     if not os.path.exists(gi):
         with open(gi, "w") as f:
             f.write("tmp/\n*.tmp\n")
+    return od, notes
+
+
+def cmd_init(args):
+    """op init [--stage discover|validate|build|operate|learn] [--send human|agent]
+    단계와 발송 방식은 처음 만들 때만 정한다. 그 뒤로는 사람이 `op stage set`, guard.json 으로 바꾼다."""
+    opts = kv(args)
+    od, notes = init_project(os.getcwd(), stage=opts.get("stage"), send_mode=opts.get("send"))
+    for n in notes:
+        print(n)
     print(f"초기화 완료: {od}")
     cur = current_stage(od)
     if cur:
@@ -248,33 +336,47 @@ def cmd_init(args):
     print(f"발송 방식: {send_mode_of(od)} ({'사람이 승인하는 순간 사람 쪽에서 보냄' if send_mode_of(od) == 'human' else '승인 뒤 에이전트가 op send 로 보냄'})")
 
 
+def status_summary(od):
+    """프로젝트 상태를 dict 로. CLI 의 op status 와 플러그인의 /status 가 같이 쓴다."""
+    fb = os.path.join(od, "feedback.md")
+    st = load_json(state_path(od), None)
+    return {
+        "root": os.path.dirname(od),
+        "business": os.path.exists(os.path.join(od, "business.md")),
+        "stage": current_stage(od),
+        "send_mode": send_mode_of(od),
+        "human_via": human_via(od),
+        "pass": st if st and st.get("status") == "running" else None,
+        "counts": {s: len([f for f in os.listdir(os.path.join(od, s)) if f.endswith(".md")])
+                   for s in ("pending", "approved", "sent", "rejected")},
+        "rejections": open(fb, encoding="utf-8").read().count("\n- 2") if os.path.exists(fb) else None,
+    }
+
+
 def cmd_status(args):
-    od = op_dir()
-    root = os.path.dirname(od)
-    biz = os.path.join(od, "business.md")
-    print(f"프로젝트: {root}")
-    print(f"business.md: {'있음' if os.path.exists(biz) else '없음 → plan 단계 필요'}")
-    cur = current_stage(od)
+    s = status_summary(op_dir())
+    print(f"프로젝트: {s['root']}")
+    print(f"business.md: {'있음' if s['business'] else '없음 → plan 단계 필요'}")
+    cur = s["stage"]
     if cur:
         print(f"단계: {STAGE_KO[cur]} ({cur}) — {STAGES[cur]['goal']}  (자세히: op stage)")
     else:
         print("단계: 사용 안 함 (운영과 같음)")
-    print(f"발송 방식: {send_mode_of(od)}")
-    st = load_json(os.path.join(od, "state.json"), None)
-    if st and st.get("status") == "running":
+    print(f"발송 방식: {s['send_mode']}")
+    print(f"사람의 결정 경로: {', '.join(s['human_via'])}")
+    st = s["pass"]
+    if st:
         nxt = next_step(st)
         print(f"진행 중인 pass: {st['pass_id']} (goal: {st.get('goal','')}) 다음 단계: {nxt or '없음 → op pass end'}")
         print(f"  단계 사용: {st['step_count']}/{st['max_steps']}")
-        for s in st["steps"]:
-            print(f"  - {s['name']}: {s['status']}" + (f" → {s['output']}" if s.get("output") else ""))
+        for step in st["steps"]:
+            print(f"  - {step['name']}: {step['status']}" + (f" → {step['output']}" if step.get("output") else ""))
     else:
         print("진행 중인 pass 없음")
-    for status in ("pending", "approved", "sent", "rejected"):
-        n = len([f for f in os.listdir(os.path.join(od, status)) if f.endswith(".md")])
+    for status, n in s["counts"].items():
         print(f"{status}: {n}")
-    fb = os.path.join(od, "feedback.md")
-    if os.path.exists(fb):
-        print(f"거절 기록: {open(fb, encoding='utf-8').read().count(chr(10) + '- 2')}건 → 초안 쓰기 전에 `op feedback` 확인")
+    if s["rejections"] is not None:
+        print(f"거절 기록: {s['rejections']}건 → 초안 쓰기 전에 `op feedback` 확인")
 
 
 # ---------------------------------------------------------------- pass (상태 머신)
@@ -379,7 +481,7 @@ def cmd_pass(args):
             f.write("\n".join(md) + "\n")
         os.remove(sp)
         print(f"pass 종료: {pid} → .operator/passes/{pid}.md")
-        print(f"승인 대기 {len(pend)}건. 사람이 `op pending list` 로 확인한다.")
+        print(f"승인 대기 {len(pend)}건. 사람이 {human_hint(od, 'op pending list', '/inbox')} 로 확인한다.")
         return
 
     if sub == "show":
@@ -578,23 +680,23 @@ def cmd_pending(args):
         with open(dst, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
         print(f"승인 대기에 올림: .operator/pending/{fname}")
-        print("이제 이 항목은 사람이 `op pending approve " + item_id + "` 할 때까지 밖으로 나가지 않는다.")
+        print(f"이제 이 항목은 사람이 {human_hint(od, 'op pending approve ' + item_id, '/ok ' + item_id)} 로 승인할 때까지 밖으로 나가지 않는다.")
         return
 
     if sub == "list":
         opts = kv(rest)
         statuses = [opts.get("status")] if opts.get("status") else ["pending", "approved"]
-        total = 0
+        if any(s not in QUEUE_STATUSES for s in statuses):
+            die(f"--status 는 {'|'.join(QUEUE_STATUSES)}")
+        items = queue_items(od, statuses)
         for s in statuses:
-            files = sorted(f for f in os.listdir(os.path.join(od, s)) if f.endswith(".md"))
-            print(f"== {s} ({len(files)})")
-            for f in files:
-                with open(os.path.join(od, s, f), encoding="utf-8") as fh:
-                    _, meta = parse_front_matter(fh.read())
+            mine = [it for it in items if it["status"] == s]
+            print(f"== {s} ({len(mine)})")
+            for it in mine:
+                meta = it["meta"]
                 extra = meta.get("channel") or meta.get("to") or ""
-                print(f"  {meta.get('id', f[:4])}  {meta.get('type', '?'):8s} {extra:20s} {meta.get('title', f)}")
-                total += 1
-        if total == 0:
+                print(f"  {it['id']}  {meta.get('type', '?'):8s} {extra:20s} {meta.get('title', it['file'])}")
+        if not items:
             print("  (비어 있음)")
         return
 
@@ -614,17 +716,13 @@ def cmd_pending(args):
             die(f"op pending {sub} <id> [--note ...] [--action \"<실행할 명령>\"]")
         opts = kv(rest[1:])
         item_id = rest[0]
-        if not human_terminal():
-            die("승인/거절은 사람이 대화형 터미널에서만 할 수 있다 (에이전트의 셸 도구에는 터미널이 없다). "
-                "자동화 스크립트에서 꼭 필요하면 OPERATOR_ALLOW_NONINTERACTIVE_APPROVE=1 을 사람이 직접 설정해라.", 7)
-        try:
-            meta = set_status(od, item_id, "approved" if sub == "approve" else "rejected",
-                              note=opts.get("note") or opts.get("reason"), action=opts.get("action"))
-        except ValueError as e:
-            die(str(e))
+        auth = terminal_authority(od, "승인/거절")
+        res = pending_decide(od, item_id, sub, auth, note=opts.get("note") or opts.get("reason"),
+                             action=opts.get("action"), send=not opts.get("no-send"))
+        meta = res["meta"]
         print(f"{item_id} → {meta['status']}")
-        if meta["status"] == "approved" and send_mode_of(od) == "human" and (meta.get("action") or "").strip() and not opts.get("no-send"):
-            code, msg = run_action(od, item_id, secrets_env=channel_env(names=ticket_secret_names(meta)))
+        if res["sent"] is not None:
+            code, msg = res["sent"]
             print(msg)
             sys.exit(code)
         if meta["status"] == "approved":
@@ -640,12 +738,46 @@ def cmd_pending(args):
     die(f"모르는 하위 명령: pending {sub}")
 
 
-def human_terminal():
-    return (sys.stdin.isatty() and sys.stdout.isatty()) or os.environ.get("OPERATOR_ALLOW_NONINTERACTIVE_APPROVE") == "1"
+QUEUE_STATUSES = ("pending", "approved", "sent", "rejected")
 
 
-def set_status(od, item_id, new_status, note=None, action=None):
-    """pending 티켓을 approved/rejected 로 옮긴다. 호출자가 사람임을 이미 확인했다고 가정한다."""
+def queue_items(od, statuses=("pending",)):
+    """[{id, status, file, path, meta, body}] — 큐 읽기. 누구나 부를 수 있다."""
+    out = []
+    for s in statuses:
+        for f in sorted(os.listdir(os.path.join(od, s))):
+            if f.endswith(".md"):
+                p = os.path.join(od, s, f)
+                with open(p, encoding="utf-8") as fh:
+                    body, meta = parse_front_matter(fh.read())
+                out.append({"id": meta.get("id", f[:4]), "status": s, "file": f, "path": p, "meta": meta, "body": body})
+    return out
+
+
+def pending_decide(od, item_id, decision, authority, note=None, action=None, send=True, secrets_env=None):
+    """사람의 결정 하나를 큐에 반영한다. decision 은 approve|reject.
+    발송 방식이 human 이고 승인된 action 이 있으면 send=True 일 때 바로 실행한다 (run_action).
+    secrets_env 가 없으면 이 티켓에 필요한 토큰만 그때 읽는다. {"meta": ..., "sent": (code, msg) | None}"""
+    if decision not in ("approve", "reject"):
+        raise OpError("결정은 approve 또는 reject", 1)
+    if not re.fullmatch(r"\d{4}", str(item_id)):
+        raise OpError(f"티켓 번호는 네 자리 숫자다: {item_id}", 1)
+    require_human(od, authority, "승인/거절")
+    try:
+        meta = set_status(od, item_id, "approved" if decision == "approve" else "rejected", note=note, action=action,
+                          by=authority.label)
+    except ValueError as e:
+        raise OpError(str(e), 1)
+    sent = None
+    if meta["status"] == "approved" and send and send_mode_of(od) == "human" and (meta.get("action") or "").strip():
+        env = secrets_env if secrets_env is not None else channel_env(names=ticket_secret_names(meta))
+        sent = run_action(od, item_id, secrets_env=env)
+    return {"meta": meta, "sent": sent}
+
+
+def set_status(od, item_id, new_status, note=None, action=None, by=None):
+    """pending 티켓을 approved/rejected 로 옮긴다. 호출자가 사람임을 이미 확인했다고 가정한다.
+    밖에서는 pending_decide 를 쓴다 (사람 경로 확인 포함)."""
     if new_status not in ("approved", "rejected"):
         raise ValueError("상태는 approved 또는 rejected")
     _, p = find_item(od, item_id, ("pending",))
@@ -659,6 +791,8 @@ def set_status(od, item_id, new_status, note=None, action=None):
         meta["action"] = action
     meta["status"] = new_status
     meta[new_status] = now()
+    if by:
+        meta["decided_by"] = by
     if note:
         meta["note"] = " ".join(str(note).split())
     dst = os.path.join(od, new_status, os.path.basename(p))
@@ -899,6 +1033,69 @@ def _discover_metric(od):
     return _section(secs, ["성공 지표", "success metric"])
 
 
+class StageBlocked(OpError):
+    def __init__(self, msg, checks):
+        super().__init__(msg, 1)
+        self.checks = checks
+
+
+def stage_move(od, event, authority, to=None, reason=None):
+    """사람의 단계 이동. event 는 advance|back|set. advance 는 지금 단계 검사를 모두 통과해야 하고
+    (아니면 StageBlocked), 다음 단계는 검사가 정한다. back 은 이유가 필요하다.
+    {"from", "to", "checks", "event"} 를 돌려준다."""
+    if event not in ("advance", "back", "set"):
+        raise OpError("단계 이동은 advance|back|set", 1)
+    require_human(od, authority, "단계 이동")
+    st = load_stage(od)
+    cur = st.get("stage") if st else None
+    checks = []
+    if event in ("set", "back"):
+        if to not in STAGES:
+            raise OpError(f"op stage {event} {'<단계>' if event == 'set' else '--to <단계> --reason ...'}   단계: {', '.join(STAGE_ORDER)}", 1)
+        if event == "back" and not reason:
+            raise OpError("되돌리는 이유를 --reason 으로 남긴다. 다음 단계 문서를 쓸 때 에이전트가 읽는다.", 1)
+        rec = {"t": now(), "from": cur, "to": to, "by": authority.label, "event": event}
+        if reason:
+            rec["reason"] = " ".join(str(reason).split())
+    else:
+        if not cur:
+            raise OpError("이 프로젝트는 단계 모델을 쓰지 않는다. 시작하려면 `op stage set discover` (또는 지금 위치).", 1)
+        checks, to = stage_checks(od, cur, config(od))
+        if not all(c[1] for c in checks):
+            raise StageBlocked("통과하지 못한 항목이 있어 넘어가지 않는다.", checks)
+        rec = {"t": now(), "from": cur, "to": to, "by": authority.label, "event": "advance"}
+        doc = stage_doc(od, cur)
+        if os.path.exists(doc):
+            import hashlib
+            with open(doc, "rb") as f:
+                data = f.read()
+            rec["doc_sha256"] = hashlib.sha256(data).hexdigest()
+            hist = os.path.join(od, "stages", "history")
+            os.makedirs(hist, exist_ok=True)
+            snap = os.path.join(hist, f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-{cur}.md")
+            with open(snap, "wb") as f:
+                f.write(data)
+            rec["snapshot"] = os.path.relpath(snap, os.path.dirname(od))
+    st = st or {"history": []}
+    st["history"] = (st.get("history") or []) + [rec]
+    st["stage"], st["started"] = to, now()
+    save_json(stage_path(od), st)
+    return {"from": cur, "to": to, "checks": checks, "event": event}
+
+
+def stage_overview(od):
+    """지금 단계, 목표, 넘어가기 검사. 플러그인의 /stage 가 쓴다."""
+    st = load_stage(od)
+    cur = st.get("stage") if st else None
+    if not cur:
+        return {"stage": None}
+    checks, target = stage_checks(od, cur, config(od))
+    last_back = next((h for h in reversed(st.get("history") or []) if h.get("event") == "back"), None)
+    return {"stage": cur, "goal": STAGES[cur]["goal"], "started": st.get("started", ""), "checks": checks,
+            "ready": all(c[1] for c in checks), "next": target,
+            "back_reason": last_back.get("reason") if last_back and last_back.get("to") == cur else None}
+
+
 def cmd_stage(args):
     sub, rest = (args[0], args[1:]) if args else ("show", [])
     opts = kv(rest)
@@ -908,47 +1105,22 @@ def cmd_stage(args):
     cur = st.get("stage") if st else None
 
     if sub in ("advance", "back", "set"):
-        if not human_terminal():
-            die("단계 이동은 사람이 대화형 터미널에서만 한다. 사용자에게 `op stage check` 결과를 보여 주고 "
-                "`op stage advance` 를 직접 실행해 달라고 요청해라.", 7)
-        if sub == "set" or (sub == "back"):
-            to = (opts.get("_") or [None])[0] if sub == "set" else opts.get("to")
-            if to not in STAGES:
-                die(f"op stage {sub} {'<단계>' if sub == 'set' else '--to <단계> --reason ...'}   단계: {', '.join(STAGE_ORDER)}")
-            if sub == "back" and not opts.get("reason"):
-                die("되돌리는 이유를 --reason 으로 남긴다. 다음 단계 문서를 쓸 때 에이전트가 읽는다.")
-            event = {"t": now(), "from": cur, "to": to, "by": "human", "event": sub}
-            if opts.get("reason"):
-                event["reason"] = " ".join(str(opts["reason"]).split())
-        else:
-            if not cur:
-                die("이 프로젝트는 단계 모델을 쓰지 않는다. 시작하려면 `op stage set discover` (또는 지금 위치).")
-            checks, target = stage_checks(od, cur, cfg)
+        auth = terminal_authority(od, "단계 이동")
+        to = (opts.get("_") or [None])[0] if sub == "set" else opts.get("to")
+        try:
+            res = stage_move(od, sub, auth, to=to, reason=opts.get("reason"))
+        except StageBlocked as e:
             print(f"{STAGE_KO[cur]} 단계 검사:")
-            print_checks(checks)
-            if not all(c[1] for c in checks):
-                die("통과하지 못한 항목이 있어 넘어가지 않는다.", 1)
+            print_checks(e.checks)
+            raise
+        if sub == "advance":
+            print(f"{STAGE_KO[cur]} 단계 검사:")
+            print_checks(res["checks"])
             if cur == "build":
                 print("등록된 마일스톤과 검사 명령 (그럴듯한 검사인지 확인해라):")
                 for m in load_milestones(od):
                     print(f"  {m['n']}. {m['title']}  ← {m.get('test')}")
-            to = target
-            event = {"t": now(), "from": cur, "to": to, "by": "human", "event": "advance"}
-            doc = stage_doc(od, cur)
-            if os.path.exists(doc):
-                import hashlib
-                data = open(doc, "rb").read()
-                event["doc_sha256"] = hashlib.sha256(data).hexdigest()
-                hist = os.path.join(od, "stages", "history")
-                os.makedirs(hist, exist_ok=True)
-                snap = os.path.join(hist, f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-{cur}.md")
-                with open(snap, "wb") as f:
-                    f.write(data)
-                event["snapshot"] = os.path.relpath(snap, os.path.dirname(od))
-        st = st or {"history": []}
-        st["history"] = (st.get("history") or []) + [event]
-        st["stage"], st["started"] = to, now()
-        save_json(stage_path(od), st)
+        to = res["to"]
         print(f"단계: {STAGE_KO.get(cur, '없음') if cur else '없음'} → {STAGE_KO[to]} ({to}). {STAGES[to]['goal']}.")
         if os.path.exists(state_path(od)):
             print("참고: 진행 중인 pass 는 이전 단계 기준이다. 에이전트에게 `op pass end` 후 새 pass 를 시작하게 해라.")
@@ -980,7 +1152,7 @@ def cmd_stage(args):
             ms = load_milestones(od)
             print(f"마일스톤: {len([m for m in ms if m.get('done')])}/{len(ms)} 통과  (op milestone list)")
         checks, target = stage_checks(od, cur, cfg)
-        print(f"넘어가기 조건 ({'모두 통과 → 사람에게 `op stage advance` 요청' if all(c[1] for c in checks) else '아직'}):")
+        print(f"넘어가기 조건 ({'모두 통과 → 사람에게 ' + human_hint(od, 'op stage advance', '/advance') + ' 요청' if all(c[1] for c in checks) else '아직'}):")
         print_checks(checks)
         return
 
@@ -1003,7 +1175,7 @@ def cmd_stage(args):
         print(f"{STAGE_KO[cur]} 단계: {'PASS' if ok else 'FAIL'}" + (f" → 다음: {STAGE_KO[target]}" if ok and target else ""))
         print_checks(checks)
         if ok:
-            print("사람에게 결과를 보여 주고 `op stage advance` 를 자기 터미널에서 실행해 달라고 요청해라.")
+            print(f"사람에게 결과를 보여 주고 {human_hint(od, 'op stage advance', '/advance')} 를 실행해 달라고 요청해라.")
         sys.exit(0 if ok else 1)
 
     if sub == "history":
@@ -1247,6 +1419,30 @@ def ticket_secret_names(meta):
     return names
 
 
+def secret_store(name, value, authority, backend=None):
+    """사람이 준 비밀값을 저장한다. 값은 어디에도 출력하지 않는다. 저장소 이름(keychain|file)을 돌려준다."""
+    if not isinstance(authority, Authority):
+        raise OpError("비밀값 등록: 사람의 결정이 필요하다.", 7)
+    if name not in secret_names():
+        raise OpError(f"모르는 비밀값 이름: {name} ({', '.join(secret_names())})", 1)
+    if not value:
+        raise OpError("값이 비어 있다.", 1)
+    return set_secret(name, value, backend)
+
+
+def secret_remove(name, authority):
+    if not isinstance(authority, Authority):
+        raise OpError("비밀값 삭제: 사람의 결정이 필요하다.", 7)
+    idx = secret_index()
+    if idx.get(name) == "keychain":
+        keychain_rm(name)
+    vals = _read_env_file()
+    vals.pop(name, None)
+    _write_env_file(vals)
+    idx.pop(name, None)
+    save_json(os.path.join(secret_dir(), "secrets.json"), idx)
+
+
 def cmd_secret(args):
     sub, rest = (args[0], args[1:]) if args else ("list", [])
     opts = kv(rest)
@@ -1258,24 +1454,16 @@ def cmd_secret(args):
             print(f"  {n:22s} {where or '-'}")
         return
     if sub in ("set", "rm"):
-        if not human_terminal():
-            die("비밀값은 사람이 대화형 터미널에서만 등록·삭제한다.", 7)
+        auth = terminal_authority(op_dir(required=False), "비밀값 등록·삭제")
         name = (opts.get("_") or [None])[0]
         if name not in secret_names():
             die(f"op secret {sub} <이름>   이름: {', '.join(secret_names())}")
         if sub == "rm":
-            idx = secret_index()
-            if idx.get(name) == "keychain":
-                keychain_rm(name)
-            vals = _read_env_file()
-            vals.pop(name, None)
-            _write_env_file(vals)
-            idx.pop(name, None)
-            save_json(os.path.join(secret_dir(), "secrets.json"), idx)
+            secret_remove(name, auth)
             print(f"{name} 삭제")
             return
-        if os.environ.get("OPERATOR_SECRET_VALUE") is not None and os.environ.get("OPERATOR_ALLOW_NONINTERACTIVE_APPROVE") == "1":
-            value = os.environ["OPERATOR_SECRET_VALUE"]   # 테스트·자동 설치용
+        if os.environ.get("OPERATOR_SECRET_VALUE") is not None:
+            value = os.environ["OPERATOR_SECRET_VALUE"]   # 테스트·설치 스크립트용. 사람 확인(터미널)은 위에서 이미 했다
         else:
             import getpass
             value = getpass.getpass(f"{name} 값 (화면에 보이지 않음): ").strip()
@@ -1283,7 +1471,7 @@ def cmd_secret(args):
             die("값이 비어 있다.")
         backend = "file" if opts.get("file") else ("keychain" if opts.get("keychain") else None)
         try:
-            where = set_secret(name, value, backend)
+            where = secret_store(name, value, auth, backend)
         except OSError as e:
             die(str(e))
         print(f"{name} 저장 → {where}" + ("  (읽을 때 macOS 가 허락을 묻는다. '항상 허용'은 누르지 않는다)" if where == "keychain" else f"  ({_env_file()}, 권한 600)"))
@@ -1455,8 +1643,7 @@ def cmd_connect(args):
     opts = kv(args)
     if (opts.get("_") or [None])[0] != "x":
         die("op connect x [--port 8766] [--no-browser]")
-    if not human_terminal():
-        die("계정 연결은 사람이 대화형 터미널에서만 한다.", 7)
+    terminal_authority(op_dir(required=False), "계정 연결")
     env = channel_env(names=["X_CLIENT_ID", "X_CLIENT_SECRET"])
     if not env.get("X_CLIENT_ID"):
         die("먼저 X 개발자 포털에서 앱을 만들고 OAuth 2.0 Client ID 를 `op secret set X_CLIENT_ID` 로 등록한다. "
@@ -1517,9 +1704,7 @@ def cmd_telegram(args):
     연결해 메시지를 가져오므로 컴퓨터에 포트를 열지 않는다. 정해진 대화방(TELEGRAM_CHAT_ID) 말고는 무시한다."""
     opts = kv(args)
     od = op_dir()
-    if not human_terminal():
-        die("op telegram 은 사람이 대화형 터미널에서만 시작한다 (launchd 로 띄울 때는 사람이 "
-            "OPERATOR_ALLOW_NONINTERACTIVE_APPROVE=1 을 plist 에 직접 넣는다).", 7)
+    terminal_authority(od, "op telegram")
     env = channel_env()
     tok = env.get("TELEGRAM_BOT_TOKEN")
     if not tok:
@@ -1555,12 +1740,13 @@ def cmd_telegram(args):
 
     def decide(item_id, d, reason=None):
         try:
-            meta = set_status(od, item_id, "approved" if d == "approve" else "rejected", note=reason)
-        except ValueError as e:
-            return say(f"{item_id}: {e}")
+            res = pending_decide(od, item_id, d, Authority("terminal", f"telegram:{chat}"), note=reason, secrets_env=loaded)
+        except OpError as e:
+            return say(f"{item_id}: {e.msg}")
+        meta = res["meta"]
         msg = f"{item_id} → {meta['status']}"
-        if meta["status"] == "approved" and human_send:
-            code, out = run_action(od, item_id, secrets_env=loaded)
+        if res["sent"] is not None:
+            code, out = res["sent"]
             msg += f"\n발송 {'완료' if code == 0 else '실패'}: {out}"
         print(f"[telegram] {msg}", flush=True)
         say(msg)
@@ -1656,8 +1842,7 @@ def cmd_serve(args):
     주소에 들어 있는 1회용 토큰이 있어야 접근된다. 에이전트는 이 명령을 실행할 수 없다."""
     opts = kv(args)
     od = op_dir()
-    if not human_terminal():
-        die("op serve 는 사람이 대화형 터미널에서만 시작할 수 있다.", 7)
+    terminal_authority(od, "op serve")
     token = secrets.token_urlsafe(24)
     human_send = send_mode_of(od) == "human"
     loaded = channel_env() if human_send else None   # 키체인 허락은 시작할 때 한 번 (사람이 컴퓨터 앞에 있을 때)
@@ -1721,14 +1906,14 @@ def cmd_serve(args):
             if d not in ("approve", "reject") or not re.fullmatch(r"\d{4}", item_id):
                 return self._send(400, _page("operator", "<p>잘못된 요청</p>"))
             try:
-                meta = set_status(od, item_id, "approved" if d == "approve" else "rejected", note=get("reason") or None)
-                msg = f"{item_id} → {meta['status']}"
-                if meta["status"] == "approved" and human_send:
-                    with send_lock:
-                        code, out = run_action(od, item_id, secrets_env=loaded)
+                with send_lock:
+                    res = pending_decide(od, item_id, d, Authority("terminal", "serve"), note=get("reason") or None, secrets_env=loaded)
+                msg = f"{item_id} → {res['meta']['status']}"
+                if res["sent"] is not None:
+                    code, out = res["sent"]
                     msg += f" · 발송 {'완료' if code == 0 else '실패'} ({out})"
-            except ValueError as e:
-                msg = str(e)
+            except OpError as e:
+                msg = e.msg
             print(f"[serve] {msg}", flush=True)
             back = f"/?t={token}"
             self._send(200, _page("operator", f"<p>{html.escape(msg)}</p><p><a href='{html.escape(back)}'>목록으로</a></p>"))
@@ -1819,7 +2004,7 @@ def cmd_send(args):
     i = args.index("--")
     head, cmdv = args[:i], args[i + 1:]
     od = op_dir()
-    if send_mode_of(od) == "human" and not human_terminal():
+    if send_mode_of(od) == "human" and not (sys.stdin.isatty() and sys.stdout.isatty() and "terminal" in human_via(od)):
         die("이 프로젝트는 사람이 승인하는 순간 사람 쪽에서 보낸다 (guard.json send_mode: human). 에이전트는 보내지 않는다. "
             "사용자에게 `op pending approve <id>` 를 요청해라. 이미 승인됐는데 실패했다면 사람이 자기 터미널에서 `op send <id>`.", 6)
     given = None
@@ -1844,7 +2029,7 @@ def extract_from_hook_input(data):
     ti = data.get("tool_input") or data.get("toolInput") or data.get("input") or {}
     if not isinstance(ti, dict):
         ti = {}
-    cmd = ti.get("command") or data.get("command") or ti.get("cmd") or ""
+    cmd = ti.get("command") or data.get("command") or ti.get("cmd") or ti.get("code") or ""   # code: Hermes execute_code
     if isinstance(cmd, list):  # Codex shell: ["bash","-lc","..."]
         parts = [str(c) for c in cmd]
         # The script is the argument after -c/-lc; joining everything would lose its quoting.
@@ -1854,11 +2039,29 @@ def extract_from_hook_input(data):
         v = ti.get(k) or data.get(k)
         if isinstance(v, str):
             paths.append(v)
-    for k in ("patch", "input"):  # Codex apply_patch
+    for k in ("patch", "input"):  # Codex apply_patch, Hermes patch (V4A 모드)
         v = ti.get(k)
         if isinstance(v, str):
             paths += re.findall(r"^\*\*\* (?:Update|Add|Delete) File: (.+)$", v, flags=re.M)
     return str(cmd), paths
+
+
+# Hermes 셸 훅의 cwd 는 세션 폴더가 아니라 게이트웨이 프로세스의 폴더다. 세션 폴더를 모르는 호출은
+# 등록된 operator 프로젝트 전부의 규칙으로 판단한다 (모르면 막는 쪽). 목록은 ~/.config/operator/projects.json:
+# 사람 쪽(플러그인 /idea, /setup use)만 쓰고, 에이전트는 그 폴더를 읽지도 쓰지도 못한다 (SECRET_COMMANDS, secret_dir).
+def projects_path():
+    return os.path.join(secret_dir(), "projects.json")
+
+
+def known_projects():
+    return [r for r in load_json(projects_path(), []) if isinstance(r, str) and os.path.isdir(os.path.join(r, OP_DIR_NAME))]
+
+
+def register_project(root):
+    root = os.path.abspath(root)
+    roots = [r for r in load_json(projects_path(), []) if isinstance(r, str) and r != root] + [root]
+    os.makedirs(secret_dir(), mode=0o700, exist_ok=True)
+    save_json(projects_path(), roots)
 
 
 # A session opened elsewhere can still act inside an operator project: `cd proj && wrangler deploy`,
@@ -1867,6 +2070,8 @@ def extract_from_hook_input(data):
 _CD = re.compile(r"""(?:^|[;&|(\n]|&&|\|\|)\s*(?:builtin\s+)?(?:cd|pushd|chdir|Set-Location|sl)\s+(?:/d\s+|-LiteralPath\s+|-Path\s+)?("[^"]*"|'[^']*'|[^\s;&|)]+)""", re.I)
 _GIT_C = re.compile(r"""\bgit\s+(?:-c\s+\S+\s+)*-C\s+("[^"]*"|'[^']*'|\S+)""")
 _DIR_OPTS = re.compile(r"""(?:--cwd|--prefix|--dir|--cd)(?:=|\s+)("[^"]*"|'[^']*'|[^\s;&|]+)""")
+# 따옴표 안의 절대 경로 (파이썬 코드나 스크립트 안의 "cd /x && git push" 같은 것)
+_QUOTED_ABS = re.compile(r"""["'](/[^"'\n]+)["']""")
 
 
 def _unquote(value):
@@ -1885,6 +2090,8 @@ def command_dirs(cmd, base):
                 continue
             raw = os.path.expanduser(raw)
             dirs.append(os.path.abspath(raw if os.path.isabs(raw) else os.path.join(base, raw)))
+    for match in _QUOTED_ABS.finditer(cmd or ""):
+        dirs.append(os.path.abspath(match.group(1)))
     # Each `cd` applies to what follows, so a later relative cd is relative to the earlier one.
     chained, cur = [], base
     for match in _CD.finditer(cmd or ""):
@@ -2009,7 +2216,23 @@ def cmd_guard(args):
     # Claude Code and Codex pass the session's working directory as "cwd"; fall back to our own.
     base = data.get("cwd") if isinstance(data.get("cwd"), str) and os.path.isabs(data.get("cwd")) else os.getcwd()
     cmd, paths = extract_from_hook_input(data)
-    roots = operator_roots(base, cmd, paths)
+    sdir = os.path.realpath(secret_dir())
+    for p in paths:   # 토큰 폴더는 어느 프로젝트에서 부르든 막는다
+        rp = os.path.realpath(p if os.path.isabs(p) else os.path.join(base, p))
+        if rp == sdir or rp.startswith(sdir + os.sep):
+            return _guard_block(fmt, "비밀값(발송 토큰)과 operator 설정 폴더는 사람이 띄운 프로세스만 읽고 쓴다. "
+                                     "채널 준비 상태는 `op deliver --check` 로 확인해라 (값은 나오지 않는다).")
+    if fmt == "hermes":
+        ti = data.get("tool_input") if isinstance(data.get("tool_input"), dict) else {}
+        workdir = ti.get("workdir")
+        if isinstance(workdir, str) and os.path.isabs(workdir):
+            base = workdir   # 터미널 도구가 폴더를 밝힌 호출만 세션 폴더를 안다
+            roots = operator_roots(base, cmd, paths)
+        else:
+            roots = operator_roots(base, cmd, paths)
+            roots += [os.path.join(r, OP_DIR_NAME) for r in known_projects() if os.path.join(r, OP_DIR_NAME) not in roots]
+    else:
+        roots = operator_roots(base, cmd, paths)
     if not roots:
         # 이 호출이 닿는 곳 어디에도 operator 가 활성화되지 않았다 → 간섭하지 않는다.
         if fmt == "cursor":
@@ -2029,6 +2252,10 @@ def cmd_guard(args):
         if fmt == "cursor":
             print(json.dumps({"permission": "allow"}))
         return
+    return _guard_block(fmt, reason)
+
+
+def _guard_block(fmt, reason):
     msg = "[operator 승인 게이트] " + reason
     if fmt == "cursor":
         print(json.dumps({"permission": "deny", "user_message": msg, "agent_message": msg}, ensure_ascii=False))
@@ -2036,6 +2263,9 @@ def cmd_guard(args):
     if fmt == "gemini":
         print(json.dumps({"decision": "deny", "reason": msg}, ensure_ascii=False))
         return
+    if fmt == "hermes":   # exit 2 + Hermes 지시 JSON. 메시지는 도구 결과로 모델에게 간다
+        print(json.dumps({"action": "block", "message": msg}, ensure_ascii=False))
+        sys.exit(2)
     # claude / codex: exit 2 + stderr → 도구 호출 차단, 메시지는 모델에게 전달
     sys.stderr.write(msg + "\n")
     sys.exit(2)
@@ -2096,7 +2326,7 @@ def main():
   pending list [--status pending|approved|sent|rejected] | show <id>
   pending approve <id> [--action "명령"] [--note ...] | reject <id> --reason ...   (사람만, 대화형 터미널)
   send <id> [-- <명령>]                   승인된 action 그대로 실행 (명령을 주면 action 과 같아야 함)
-  guard [--format claude|codex|cursor|gemini]   (훅: stdin 으로 JSON)
+  guard [--format claude|codex|cursor|gemini|hermes]   (훅: stdin 으로 JSON)
   guard check [--cwd DIR] "<command>"     이 명령이 막히는지 확인
   llm --role classify|summarize|tag|extract [--input f] "프롬프트"
   deliver --check                         채널(x/threads/email/webhook) 토큰 준비 상태 (값은 출력 안 함)
@@ -2110,9 +2340,13 @@ def main():
 """)
         return
     fn = COMMANDS.get(sys.argv[1])
-    if not fn:
-        die(f"모르는 명령: {sys.argv[1]} (op help)")
-    fn(sys.argv[2:])
+    try:
+        if not fn:
+            die(f"모르는 명령: {sys.argv[1]} (op help)")
+        fn(sys.argv[2:])
+    except OpError as e:
+        sys.stderr.write(f"op: {e.msg}\n")
+        sys.exit(e.code)
 
 
 if __name__ == "__main__":

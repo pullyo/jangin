@@ -1,0 +1,9 @@
+name: operator
+version: "0.6.0"
+description: "1인 사업 비서: 아이디어 → 검증 → 만들기 → 운영. 승인·단계 이동·발송은 사람이 친 명령으로만"
+author: "pullyo"
+license: "MIT"
+homepage: "https://github.com/pullyo/operator-skill"
+requires_hermes: ">=0.22"
+provides_hooks:
+  - pre_tool_call

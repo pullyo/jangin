@@ -82,7 +82,7 @@ so the agent's own shell tool can never approve or advance anything.
 # Any tool, by hand: links the skill into ~/.claude, ~/.codex, ~/.cursor, ~/.gemini (whichever exist)
 git clone https://github.com/pullyo/operator-skill
 sh operator-skill/skills/operator/install.sh
-sh operator-skill/skills/operator/install.sh --print-hooks   # hook snippets for Claude Code / Codex / Cursor / Gemini CLI
+sh operator-skill/skills/operator/install.sh --print-hooks   # hook snippets for Claude Code / Codex / Cursor / Gemini CLI / Hermes
 ```
 
 Without a hook the skill still works, but blocking becomes an instruction instead of a guarantee.
@@ -119,6 +119,29 @@ op connect x                         # then X (see channels guide), Threads, ema
 op telegram                          # optional: approve from your phone
 ```
 
+## Using it in Hermes (a dedicated business assistant)
+
+With [Hermes Agent](https://github.com/NousResearch/hermes-agent) as the engine you use operator from an app and from
+messengers, without a terminal. Hermes itself is not modified: operator adds a plugin, the skill and a personality (SOUL.md).
+Checked against Hermes 0.22.5.
+
+```bash
+git clone https://github.com/pullyo/operator-skill
+sh operator-skill/hermes/operator/install.sh      # creates the 'operator' profile with the plugin, skill and personality
+# to turn your existing default Hermes into Operator instead: add --home ~/.hermes
+operator setup                                    # guided setup (Korean)
+```
+
+`operator setup` walks through six steps: model login (handing off to Hermes' model setup when needed), enabling the plugin,
+the project folder, the approval mode (desktop + messenger, or messenger only), the messenger and its allowed user for phone
+approvals, and a second lock (a shell hook that blocks even if the plugin is off). `operator setup --hermes` opens the original
+Hermes wizard; `operator setup model` runs one Hermes section.
+
+In the chat (Desktop, or a connected Telegram etc.): `/idea <one line>`, `/project`, `/stage`, `/advance`, `/back <stage> <reason>`,
+`/inbox`, `/ok <id>`, `/reject <id> <reason>`, `/setup`. Hermes' built-in `/approve` is for dangerous-command prompts and is not
+operator's `/ok`. Projects made with `/idea` refuse terminal approvals; to accept only commands typed in a messenger, set
+`"human_via": ["messenger"]` in `.operator/guard.json`. Design, and what is and is not verified: [docs/hermes-design.md](docs/hermes-design.md).
+
 ## Commands
 
 | Command | Who | Purpose |
@@ -151,8 +174,10 @@ op telegram                          # optional: approve from your phone
   recursive deletes, `git push --force`, `DROP TABLE`.
 - The queue (`.operator/pending|approved|sent|rejected`) and the stage, milestone, metric and guard files change only through `op`.
   Writing to them with an edit tool or with `mv`/`cp`/`>`/`sed -i`/a Python one-liner is blocked. Reads are allowed.
-- Approving, rejecting, moving stages, storing secrets, connecting accounts and starting the approval servers refuse to run
-  without an interactive terminal. An agent cannot run them, even from a copied script.
+- Approving, rejecting, moving stages, storing secrets, connecting accounts and starting the approval servers need a human
+  decision route (an *authority*): an interactive terminal on the CLI, or the Hermes plugin receiving a command you typed
+  (`/approve`). The route is recorded on the ticket (`decided_by`) and in the stage history (`by`). No environment variable
+  turns an agent into a human.
 - In the default human send mode, the agent cannot run `op send` at all; the approved action runs in your process.
   In agent mode, `op send` runs only the action recorded on the approved ticket.
 - Reading `~/.config/operator/`, `security find-generic-password`, `printenv` and the like are blocked, including through the
@@ -162,6 +187,11 @@ op telegram                          # optional: approve from your phone
 
 **Not covered** — be aware:
 
+- **The terminal check is accident protection, not proof.** An agent's shell tool has no terminal, so ordinary calls fail,
+  but a fake terminal (`script -q /dev/null op …`) or a command hidden in a script file can get past the TTY check and the
+  guard (confirmed on macOS). To stop a determined agent running as your user, accept only the Hermes messenger route with
+  `"human_via": ["messenger"]` in `.operator/guard.json`, and use isolation tier 2 (docker) for real deploy accounts
+  ([docs/hermes-design.md](docs/hermes-design.md), section 4).
 - Tools without hooks only get the rules as instructions. The Keychain prompt and human send mode still keep tokens away from them.
 - The guard reads commands; paths built from variables (`cd $HOME/x`) are judged from the session folder only, and the guard only
   acts on calls that reach a folder with `.operator/`.
@@ -183,6 +213,8 @@ operator-skill/
 ├── .claude-plugin/        Claude Code plugin + marketplace manifest
 ├── .codex-plugin/         Codex plugin manifest
 ├── hooks/hooks.json       Claude Code plugin hook (approval gate)
+├── hermes/operator/       Hermes plugin (slash commands, guard hook, SOUL.md, install.sh)
+├── docs/                  Design notes (hermes-design.md)
 ├── tests/                 End-to-end tests that drive the real `op` process
 └── skills/operator/       The skill (Agent Skills format)
     ├── SKILL.md           What the agent reads
