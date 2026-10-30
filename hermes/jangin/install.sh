@@ -9,6 +9,7 @@
 #   sh hermes/jangin/install.sh --home 폴더         # 이 HERMES_HOME 에 바로 설치 (프로필을 만들지 않음, 시험용)
 #   sh hermes/jangin/install.sh --no-soul           # 프로필의 SOUL.md 는 그대로 둔다
 #   sh hermes/jangin/install.sh --no-command        # ~/.local/bin/jangin 명령을 만들지 않는다
+#   sh hermes/jangin/install.sh --no-skin           # Jangin 시작 화면(스킨)을 켜지 않는다
 #
 # 하는 일: <HERMES_HOME>/plugins/jangin/ 에 플러그인을 복사하고, 그 안의 skill/ 에 jangin 스킬을 복사한다.
 # SOUL.md 는 원래 것을 SOUL.md.bak-날짜 로 남긴 뒤 바꾼다. 마지막에 `hermes plugins enable jangin` 을 실행하고,
@@ -21,6 +22,7 @@ TARGET=""
 SOUL=1
 COMMAND=1
 FRESH=0
+SKIN=1
 while [ $# -gt 0 ]; do
   case "$1" in
     --profile) PROFILE=$2; shift 2 ;;
@@ -28,7 +30,8 @@ while [ $# -gt 0 ]; do
     --no-soul) SOUL=0; shift ;;
     --no-command) COMMAND=0; shift ;;
     --fresh) FRESH=1; shift ;;
-    -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
+    --no-skin) SKIN=0; shift ;;
+    -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
     *) echo "모르는 옵션: $1" >&2; exit 1 ;;
   esac
 done
@@ -79,6 +82,13 @@ if [ "$SOUL" = 1 ]; then
   fi
   cp "$HERE/SOUL.md" "$TARGET/SOUL.md"
   echo "  + 성격:     $TARGET/SOUL.md"
+fi
+
+# 시작 화면(스킨): 로고·그림·색·환영 문구. 전용 프로필에서만 켠다 (쓰던 Hermes 의 화면은 바꾸지 않는다).
+mkdir -p "$TARGET/skins"
+cp "$HERE/skin.yaml" "$TARGET/skins/jangin.yaml"
+if [ "$SKIN" = 1 ] && [ -z "${HOME_GIVEN:-}" ] && command -v hermes >/dev/null 2>&1; then
+  HERMES_HOME="$TARGET" hermes config set display.skin jangin >/dev/null 2>&1 && echo "  + 시작 화면: Jangin 스킨 ($TARGET/skins/jangin.yaml)"
 fi
 
 if command -v hermes >/dev/null 2>&1; then

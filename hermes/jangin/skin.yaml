@@ -1,0 +1,102 @@
+# Jangin(장인) Hermes 스킨 — 시작 화면(로고·그림), 색, 환영 문구, 진행 표시.
+# install.sh 가 <프로필>/skins/jangin.yaml 로 복사하고 `display.skin: jangin` 으로 켠다.
+# 색은 로고의 짙은 갈색(#2E1C14)과 크림색(#F3E6CF), 불꽃의 호박색에서 왔다.
+name: jangin
+description: "Jangin(장인) — 모루와 망치, 갈색과 크림색"
+colors:
+  banner_border: "#8B5A2B"
+  banner_title: "#F0D9B5"
+  banner_accent: "#E0A458"
+  banner_dim: "#9C7B5B"
+  banner_text: "#F3E6CF"
+  ui_accent: "#E0A458"
+  ui_label: "#D9B98C"
+  ui_ok: "#8BC34A"
+  ui_error: "#E57373"
+  ui_warn: "#FFB74D"
+  prompt: "#F3E6CF"
+  input_rule: "#8B5A2B"
+  response_border: "#C8945A"
+  status_bar_bg: "#24180F"
+  status_bar_text: "#F3E6CF"
+  status_bar_strong: "#E0A458"
+  status_bar_dim: "#8A6E55"
+  status_bar_good: "#8BC34A"
+  status_bar_warn: "#FFB74D"
+  status_bar_bad: "#E57373"
+  status_bar_critical: "#EF5350"
+  session_label: "#D9B98C"
+  session_border: "#5E4630"
+  completion_menu_bg: "#24180F"
+  completion_menu_current_bg: "#4A3220"
+  selection_bg: "#5A3D26"
+  shell_dollar: "#E0A458"
+  voice_status_bg: "#24180F"
+light_colors:
+  banner_border: "#6B4226"
+  banner_title: "#3B2416"
+  banner_accent: "#9A5B1E"
+  banner_dim: "#8A6E55"
+  banner_text: "#2E1C14"
+  ui_accent: "#9A5B1E"
+  ui_label: "#6B4226"
+  prompt: "#2E1C14"
+  input_rule: "#6B4226"
+  response_border: "#8B5A2B"
+  status_bar_bg: "#F3E6CF"
+  status_bar_text: "#2E1C14"
+  status_bar_strong: "#9A5B1E"
+  status_bar_dim: "#8A6E55"
+  session_label: "#6B4226"
+  session_border: "#C8B79F"
+  completion_menu_bg: "#F3E6CF"
+  completion_menu_current_bg: "#E3CFAF"
+  selection_bg: "#E3CFAF"
+  shell_dollar: "#9A5B1E"
+spinner:
+  waiting_faces: ["(⚒)", "(▲)", "(✦)", "(·)", "(⚒)"]
+  thinking_faces: ["(⚒)", "(✦)", "(▲)", "(⌁)", "(⚒)"]
+  thinking_verbs:
+    - "망치질하는 중"
+    - "담금질하는 중"
+    - "다듬는 중"
+    - "두 번 재는 중"
+    - "불을 보는 중"
+    - "모양을 잡는 중"
+    - "날을 세우는 중"
+    - "광을 내는 중"
+  wings:
+    - ["⟪⚒", "⚒⟫"]
+    - ["⟪✦", "✦⟫"]
+    - ["⟪▲", "▲⟫"]
+branding:
+  agent_name: "Jangin"
+  welcome: "Jangin(장인)에 오신 것을 환영합니다. 새 아이디어는 /idea, 도움말은 /help."
+  goodbye: "다음 작업에서 뵙겠습니다. ⚒"
+  response_label: " ⚒ Jangin "
+  prompt_symbol: "⚒"
+  help_header: "(⚒) 사용할 수 있는 명령"
+tool_prefix: "┊"
+banner_logo: |-
+  [bold #F3E6CF]     ██╗ █████╗ ███╗   ██╗ ██████╗ ██╗███╗   ██╗[/]
+  [bold #EBD3AE]     ██║██╔══██╗████╗  ██║██╔════╝ ██║████╗  ██║[/]
+  [#E3C08F]     ██║███████║██╔██╗ ██║██║  ███╗██║██╔██╗ ██║[/]
+  [#DDAA6E]██   ██║██╔══██║██║╚██╗██║██║   ██║██║██║╚██╗██║[/]
+  [#D0924F]╚█████╔╝██║  ██║██║ ╚████║╚██████╔╝██║██║ ╚████║[/]
+  [#B87A3E] ╚════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚═╝╚═╝  ╚═══╝[/]
+banner_hero: |-
+  [#F3E6CF]       ▄████████▄       [/][#FFB74D]  ✦[/]
+  [#F3E6CF]       ██████████       [/][#E0A458] ✦ ·[/]
+  [#F3E6CF]       ▀████████▀[/][#FFB74D]   ✦  ·  [/]
+  [#C8945A]           ██     [/][#E0A458]  ·      [/]
+  [#C8945A]           ██              [/]
+  [#C8945A]           ██              [/]
+  [#9C6B3F]   ▄▄▄▄▄▄▄▄██▄▄▄▄▄▄▄▄▄▄▄▄  [/]
+  [#8B5A2B]   ▀████████████████████▀▀▀[/]
+  [#8B5A2B]       ▀████████████▀      [/]
+  [#6B4226]         ▐████████▌        [/]
+  [#6B4226]       ▄████████████▄      [/]
+  [#5E4630]      ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀     [/]
+  [#E0A458]                           [/]
+  [bold #F0D9B5]        장   인  JANGIN       [/]
+  [dim #9C7B5B]     idea · build · ship     [/]

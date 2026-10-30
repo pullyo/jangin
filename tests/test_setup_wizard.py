@@ -218,6 +218,8 @@ class InstallCommandTests(unittest.TestCase):
         self.assertTrue(cmd.exists())
         plug = self.home / '.hermes' / 'profiles' / 'jangin' / 'plugins' / 'jangin'
         self.assertTrue((plug / 'setup_wizard.py').exists())
+        self.assertTrue((self.home / '.hermes' / 'profiles' / 'jangin' / 'skins' / 'jangin.yaml').exists())
+        self.assertIn('config set display.skin jangin', self.log.read_text())
         subprocess.run([str(cmd), 'chat', '-q', 'hi'], env=self.env, capture_output=True, text=True)
         subprocess.run([str(cmd), 'setup', 'model'], env=self.env, capture_output=True, text=True)
         subprocess.run([str(cmd), 'setup', '--hermes'], env=self.env, capture_output=True, text=True)

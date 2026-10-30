@@ -138,6 +138,8 @@ The one line installs Hermes if it is missing (asking first), downloads jangin t
 grants, the profile inherits the default profile's login), and opens `jangin setup`. Afterwards one command does everything:
 `jangin chat`, `jangin setup`, `jangin update` (updates Hermes and jangin together). In the Hermes app, pick the Jangin
 profile; plain `hermes` stays stock Hermes.
+The Jangin profile's start screen shows the JANGIN wordmark, an anvil-and-hammer drawing, brown and cream colors and a Korean
+welcome line (skin `hermes/jangin/skin.yaml`; install with `--no-skin` to keep the stock look).
 
 `jangin setup` first runs the original Hermes setup wizard as-is (model and login, terminal, messaging, tools), then adds the
 jangin steps in the same Hermes wizard style (◆ headers, numbered choices, Enter keeps the current value, Esc cancels): enabling the plugin, the project folder, the approval mode (desktop + messenger, or messenger only), the allowed
