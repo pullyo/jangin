@@ -39,9 +39,17 @@
 (`script -q /dev/null …`)이나 스크립트 파일로 감싼 호출은 TTY 검사와 가드를 통과할 수 있다. 0.5 의
 `OPERATOR_ALLOW_NONINTERACTIVE_APPROVE` 는 0.6 에서 없앴다(에이전트도 환경 변수를 설정할 수 있어서).
 
-`guard.json` 의 `human_via` 로 받을 경로를 고른다. 기본은 `["terminal", "plugin"]`. Hermes 플러그인을 쓰면
-`["plugin"]` 으로 터미널 경로를 끈다: 그러면 `op pending approve`, `op stage advance`, `op serve`, `op telegram` 은
-진짜 터미널에서도 거부되고, 결정은 사용자가 Hermes 에 친 `/approve`·`/advance` 로만 들어온다.
+`guard.json` 의 `human_via` 로 받을 경로를 고른다. 기본은 `["terminal", "local", "messenger"]`.
+
+| 경로 | 어디서 | 세기 |
+|---|---|---|
+| `terminal` | 대화형 터미널에서 친 `op …` (터미널에서 띄운 `op telegram`·`op serve` 포함) | 실수 방지. 가짜 터미널로 흉내 낼 수 있다 |
+| `local` | Hermes Desktop·TUI·CLI 에서 친 플러그인 명령 | 실수 방지. 같은 사용자 프로세스가 로컬 소켓으로 흉내 낼 수 있다 |
+| `messenger` | Hermes 게이트웨이가 받은 메신저 메시지 (허용된 사용자) | 가장 강함. 사용자 ID 를 메신저 서버가 보증한다 |
+
+Hermes 플러그인의 `/idea` 로 만든 프로젝트는 `["local", "messenger"]` 로 시작한다(터미널 경로 끔).
+그러면 `op pending approve`, `op stage advance`, `op serve`, `op telegram` 은 진짜 터미널에서도 거부된다.
+가장 엄격하게는 `["messenger"]`: 결정은 휴대폰 메신저에서만 들어온다.
 파이썬 한 줄로 op 모듈의 `Authority(`, `pending_decide(`, `stage_move(` 를 부르는 것도 사람 전용 명령으로 막는다.
 
 ## 보호 경로 (`deny_paths`) — Write/Edit/apply_patch 대상

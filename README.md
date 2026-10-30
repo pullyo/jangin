@@ -82,7 +82,7 @@ so the agent's own shell tool can never approve or advance anything.
 # Any tool, by hand: links the skill into ~/.claude, ~/.codex, ~/.cursor, ~/.gemini (whichever exist)
 git clone https://github.com/pullyo/operator-skill
 sh operator-skill/skills/operator/install.sh
-sh operator-skill/skills/operator/install.sh --print-hooks   # hook snippets for Claude Code / Codex / Cursor / Gemini CLI
+sh operator-skill/skills/operator/install.sh --print-hooks   # hook snippets for Claude Code / Codex / Cursor / Gemini CLI / Hermes
 ```
 
 Without a hook the skill still works, but blocking becomes an instruction instead of a guarantee.
@@ -166,8 +166,8 @@ op telegram                          # optional: approve from your phone
 
 - **The terminal check is accident protection, not proof.** An agent's shell tool has no terminal, so ordinary calls fail,
   but a fake terminal (`script -q /dev/null op …`) or a command hidden in a script file can get past the TTY check and the
-  guard (confirmed on macOS). To stop a determined agent running as your user, accept only the Hermes plugin route with
-  `"human_via": ["plugin"]` in `.operator/guard.json`, and use isolation tier 2 (docker) for real deploy accounts
+  guard (confirmed on macOS). To stop a determined agent running as your user, accept only the Hermes messenger route with
+  `"human_via": ["messenger"]` in `.operator/guard.json`, and use isolation tier 2 (docker) for real deploy accounts
   ([docs/hermes-design.md](docs/hermes-design.md), section 4).
 - Tools without hooks only get the rules as instructions. The Keychain prompt and human send mode still keep tokens away from them.
 - The guard reads commands; paths built from variables (`cd $HOME/x`) are judged from the session folder only, and the guard only

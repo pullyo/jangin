@@ -81,7 +81,7 @@ operator 는 [Agent Skill](https://agentskills.io) 과 의존성 없는 작은 �
 # 어떤 도구든 수동 설치: ~/.claude, ~/.codex, ~/.cursor, ~/.gemini 중 있는 곳에 링크
 git clone https://github.com/pullyo/operator-skill
 sh operator-skill/skills/operator/install.sh
-sh operator-skill/skills/operator/install.sh --print-hooks   # Claude Code / Codex / Cursor / Gemini CLI 용 훅 설정
+sh operator-skill/skills/operator/install.sh --print-hooks   # Claude Code / Codex / Cursor / Gemini CLI / Hermes 용 훅 설정
 ```
 
 훅 없이도 스킬은 동작하지만, 그때 차단은 보장이 아니라 지시 수준이 됩니다.
@@ -164,8 +164,8 @@ op telegram                          # 선택: 휴대폰으로 승인
 
 - **터미널 확인은 증명이 아니라 실수 방지입니다.** 에이전트의 셸 도구에는 터미널이 없어서 보통의 호출은 막히지만,
   가짜 터미널(`script -q /dev/null op …`)이나 스크립트 파일로 감싸면 TTY 검사와 가드를 통과할 수 있습니다(이 맥에서 확인).
-  같은 사용자 권한으로 도는 에이전트가 작정하고 우회하는 것까지 막으려면 Hermes 플러그인 경로만 받도록
-  `.operator/guard.json` 에 `"human_via": ["plugin"]` 을 두고, 실제 배포 계정에는 격리 등급 2(docker)를 씁니다
+  같은 사용자 권한으로 도는 에이전트가 작정하고 우회하는 것까지 막으려면 Hermes 메신저 경로만 받도록
+  `.operator/guard.json` 에 `"human_via": ["messenger"]` 를 두고, 실제 배포 계정에는 격리 등급 2(docker)를 씁니다
   ([docs/hermes-design.md](docs/hermes-design.md) 4절).
 - 훅을 지원하지 않는 도구에서는 규칙이 지시로만 전달됩니다. 다만 키체인 허락 창과 사람 쪽 발송은 그때도 토큰을 지킵니다.
 - 가드는 명령 문자열을 읽습니다. 변수로 만든 경로(`cd $HOME/x`)는 세션 폴더 기준으로만 판단하고,

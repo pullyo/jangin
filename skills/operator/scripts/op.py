@@ -135,15 +135,20 @@ def die(msg, code=1):
 # ---------------------------------------------------------------- authority (사람의 결정이 어느 경로로 왔나)
 # 승인·거절, 단계 이동, 비밀값 등록은 Authority 를 받아야만 실행된다. 경로마다 증명의 세기가 다르다.
 #
-#   terminal  op 를 대화형 터미널에서 실행했다 (op telegram/serve 처럼 터미널에서 띄운 프로세스 안의 버튼 포함).
-#             에이전트의 일반적인 셸 호출은 막지만 증명은 아니다. 가짜 터미널(`script -q /dev/null op …`)이나
-#             스크립트 파일로 감싼 호출은 통과할 수 있다. 실수 방지 장치로 본다.
-#   plugin    사람이 메신저·앱에 친 명령을 받은 프로세스(Hermes 플러그인)가 op 를 모듈로 가져와 직접 만든다.
-#             CLI 로는 만들 수 없다. 같은 사용자 권한으로 도는 에이전트가 파이썬으로 이 모듈을 가져오는 것까지
-#             막지는 못한다. 그건 격리 등급 2(docker, .operator 일부 읽기 전용)가 막는다.
+#   terminal   op 를 대화형 터미널에서 실행했다 (op telegram/serve 처럼 터미널에서 띄운 프로세스 안의 버튼 포함).
+#              에이전트의 일반적인 셸 호출은 막지만 증명은 아니다. 가짜 터미널(`script -q /dev/null op …`)이나
+#              스크립트 파일로 감싼 호출은 통과할 수 있다. 실수 방지 장치로 본다.
+#   local      Hermes 플러그인이 Desktop·TUI·CLI 화면에서 친 명령을 받았다. 이 화면들은 같은 사용자 권한의 로컬
+#              소켓(slash.exec)으로 명령을 보내므로, 에이전트의 터미널 명령도 원리상 흉내 낼 수 있다. terminal 과 같은 세기.
+#   messenger  Hermes 게이트웨이가 텔레그램·디스코드 같은 메신저에서 허용된 사용자의 메시지로 받은 명령. 사용자 ID 는
+#              메신저 서버가 보증하고, 에이전트는 사용자 계정으로 메시지를 보낼 수 없다. 지금 가장 강한 경로다.
 #
-# 프로젝트는 guard.json 의 human_via 로 받을 경로를 고른다. Hermes 를 쓰면 ["plugin"] 으로 터미널 경로를 끈다.
-AUTHORITY_KINDS = ("terminal", "plugin")
+# 세 경로 모두 같은 사용자 권한으로 도는 에이전트가 파이썬으로 이 모듈을 가져와 Authority 를 만드는 것까지는 막지 못한다.
+# 그건 격리 등급 2(docker, .operator 일부 읽기 전용)가 막는다.
+#
+# 프로젝트는 guard.json 의 human_via 로 받을 경로를 고른다. 기본은 셋 다. Hermes 로 만든 프로젝트는
+# ["local", "messenger"] (터미널 끔), 엄격하게는 ["messenger"].
+AUTHORITY_KINDS = ("terminal", "local", "messenger")
 
 
 class Authority:
@@ -2019,7 +2024,7 @@ def extract_from_hook_input(data):
     ti = data.get("tool_input") or data.get("toolInput") or data.get("input") or {}
     if not isinstance(ti, dict):
         ti = {}
-    cmd = ti.get("command") or data.get("command") or ti.get("cmd") or ""
+    cmd = ti.get("command") or data.get("command") or ti.get("cmd") or ti.get("code") or ""   # code: Hermes execute_code
     if isinstance(cmd, list):  # Codex shell: ["bash","-lc","..."]
         parts = [str(c) for c in cmd]
         # The script is the argument after -c/-lc; joining everything would lose its quoting.
@@ -2029,11 +2034,29 @@ def extract_from_hook_input(data):
         v = ti.get(k) or data.get(k)
         if isinstance(v, str):
             paths.append(v)
-    for k in ("patch", "input"):  # Codex apply_patch
+    for k in ("patch", "input"):  # Codex apply_patch, Hermes patch (V4A 모드)
         v = ti.get(k)
         if isinstance(v, str):
             paths += re.findall(r"^\*\*\* (?:Update|Add|Delete) File: (.+)$", v, flags=re.M)
     return str(cmd), paths
+
+
+# Hermes 셸 훅의 cwd 는 세션 폴더가 아니라 게이트웨이 프로세스의 폴더다. 세션 폴더를 모르는 호출은
+# 등록된 operator 프로젝트 전부의 규칙으로 판단한다 (모르면 막는 쪽). 목록은 ~/.config/operator/projects.json:
+# 사람 쪽(플러그인 /idea, /setup use)만 쓰고, 에이전트는 그 폴더를 읽지도 쓰지도 못한다 (SECRET_COMMANDS, secret_dir).
+def projects_path():
+    return os.path.join(secret_dir(), "projects.json")
+
+
+def known_projects():
+    return [r for r in load_json(projects_path(), []) if isinstance(r, str) and os.path.isdir(os.path.join(r, OP_DIR_NAME))]
+
+
+def register_project(root):
+    root = os.path.abspath(root)
+    roots = [r for r in load_json(projects_path(), []) if isinstance(r, str) and r != root] + [root]
+    os.makedirs(secret_dir(), mode=0o700, exist_ok=True)
+    save_json(projects_path(), roots)
 
 
 # A session opened elsewhere can still act inside an operator project: `cd proj && wrangler deploy`,
@@ -2042,6 +2065,8 @@ def extract_from_hook_input(data):
 _CD = re.compile(r"""(?:^|[;&|(\n]|&&|\|\|)\s*(?:builtin\s+)?(?:cd|pushd|chdir|Set-Location|sl)\s+(?:/d\s+|-LiteralPath\s+|-Path\s+)?("[^"]*"|'[^']*'|[^\s;&|)]+)""", re.I)
 _GIT_C = re.compile(r"""\bgit\s+(?:-c\s+\S+\s+)*-C\s+("[^"]*"|'[^']*'|\S+)""")
 _DIR_OPTS = re.compile(r"""(?:--cwd|--prefix|--dir|--cd)(?:=|\s+)("[^"]*"|'[^']*'|[^\s;&|]+)""")
+# 따옴표 안의 절대 경로 (파이썬 코드나 스크립트 안의 "cd /x && git push" 같은 것)
+_QUOTED_ABS = re.compile(r"""["'](/[^"'\n]+)["']""")
 
 
 def _unquote(value):
@@ -2060,6 +2085,8 @@ def command_dirs(cmd, base):
                 continue
             raw = os.path.expanduser(raw)
             dirs.append(os.path.abspath(raw if os.path.isabs(raw) else os.path.join(base, raw)))
+    for match in _QUOTED_ABS.finditer(cmd or ""):
+        dirs.append(os.path.abspath(match.group(1)))
     # Each `cd` applies to what follows, so a later relative cd is relative to the earlier one.
     chained, cur = [], base
     for match in _CD.finditer(cmd or ""):
@@ -2184,7 +2211,23 @@ def cmd_guard(args):
     # Claude Code and Codex pass the session's working directory as "cwd"; fall back to our own.
     base = data.get("cwd") if isinstance(data.get("cwd"), str) and os.path.isabs(data.get("cwd")) else os.getcwd()
     cmd, paths = extract_from_hook_input(data)
-    roots = operator_roots(base, cmd, paths)
+    sdir = os.path.realpath(secret_dir())
+    for p in paths:   # 토큰 폴더는 어느 프로젝트에서 부르든 막는다
+        rp = os.path.realpath(p if os.path.isabs(p) else os.path.join(base, p))
+        if rp == sdir or rp.startswith(sdir + os.sep):
+            return _guard_block(fmt, "비밀값(발송 토큰)과 operator 설정 폴더는 사람이 띄운 프로세스만 읽고 쓴다. "
+                                     "채널 준비 상태는 `op deliver --check` 로 확인해라 (값은 나오지 않는다).")
+    if fmt == "hermes":
+        ti = data.get("tool_input") if isinstance(data.get("tool_input"), dict) else {}
+        workdir = ti.get("workdir")
+        if isinstance(workdir, str) and os.path.isabs(workdir):
+            base = workdir   # 터미널 도구가 폴더를 밝힌 호출만 세션 폴더를 안다
+            roots = operator_roots(base, cmd, paths)
+        else:
+            roots = operator_roots(base, cmd, paths)
+            roots += [os.path.join(r, OP_DIR_NAME) for r in known_projects() if os.path.join(r, OP_DIR_NAME) not in roots]
+    else:
+        roots = operator_roots(base, cmd, paths)
     if not roots:
         # 이 호출이 닿는 곳 어디에도 operator 가 활성화되지 않았다 → 간섭하지 않는다.
         if fmt == "cursor":
@@ -2204,6 +2247,10 @@ def cmd_guard(args):
         if fmt == "cursor":
             print(json.dumps({"permission": "allow"}))
         return
+    return _guard_block(fmt, reason)
+
+
+def _guard_block(fmt, reason):
     msg = "[operator 승인 게이트] " + reason
     if fmt == "cursor":
         print(json.dumps({"permission": "deny", "user_message": msg, "agent_message": msg}, ensure_ascii=False))
@@ -2211,6 +2258,9 @@ def cmd_guard(args):
     if fmt == "gemini":
         print(json.dumps({"decision": "deny", "reason": msg}, ensure_ascii=False))
         return
+    if fmt == "hermes":   # exit 2 + Hermes 지시 JSON. 메시지는 도구 결과로 모델에게 간다
+        print(json.dumps({"action": "block", "message": msg}, ensure_ascii=False))
+        sys.exit(2)
     # claude / codex: exit 2 + stderr → 도구 호출 차단, 메시지는 모델에게 전달
     sys.stderr.write(msg + "\n")
     sys.exit(2)
@@ -2271,7 +2321,7 @@ def main():
   pending list [--status pending|approved|sent|rejected] | show <id>
   pending approve <id> [--action "명령"] [--note ...] | reject <id> --reason ...   (사람만, 대화형 터미널)
   send <id> [-- <명령>]                   승인된 action 그대로 실행 (명령을 주면 action 과 같아야 함)
-  guard [--format claude|codex|cursor|gemini]   (훅: stdin 으로 JSON)
+  guard [--format claude|codex|cursor|gemini|hermes]   (훅: stdin 으로 JSON)
   guard check [--cwd DIR] "<command>"     이 명령이 막히는지 확인
   llm --role classify|summarize|tag|extract [--input f] "프롬프트"
   deliver --check                         채널(x/threads/email/webhook) 토큰 준비 상태 (값은 출력 안 함)

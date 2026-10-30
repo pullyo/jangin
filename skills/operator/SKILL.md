@@ -13,7 +13,7 @@ description: >-
 license: MIT
 compatibility: >-
   python3 3.8+ (표준 라이브러리만). Agent Skills 표준을 읽는 모든 에이전트. 승인 게이트의
-  물리적 차단은 PreToolUse 류 훅을 지원하는 도구(Claude Code, Codex, Cursor, Gemini CLI)에서만 100%.
+  물리적 차단은 PreToolUse 류 훅을 지원하는 도구(Claude Code, Codex, Cursor, Gemini CLI, Hermes)에서만 동작한다.
 metadata:
   author: plant313
   version: "0.6.0"
@@ -145,10 +145,12 @@ op pass done report  ;  op pass end                             # passes/<id>.md
 
 너는 승인하지 못한다. 훅이 `op pending approve/reject`, `op stage advance/back/set`, `op secret set`, `op serve`,
 `op telegram`, `op connect` 를 막고, `.operator/` 의 큐·단계·마일스톤·지표·가드 파일을 도구나 셸로 고치는 것도 막는다.
-이 명령들은 사람의 결정 경로(대화형 터미널, 또는 Hermes 에서 사용자가 친 `/approve`·`/advance`)로만 동작한다.
+이 명령들은 사람의 결정 경로(대화형 터미널, 또는 Hermes 에서 사용자가 친 `/ok`·`/advance`)로만 동작한다.
 네 셸 도구에는 터미널이 없어서 실행되지 않는다. 버그가 아니라 설계다. 가짜 터미널(`script`)이나 스크립트 파일로
 감싸는 것은 막힌 것을 우회하는 행동이다. 기술적으로 될 때가 있어도 하지 마라.
-Hermes 에서는 사용자에게 터미널 명령 대신 `/approve 0003`, `/advance` 같은 슬래시 명령을 안내한다.
+Hermes 에서는 사용자에게 터미널 명령 대신 operator 플러그인의 슬래시 명령을 안내한다: 승인 대기 `/inbox`,
+승인 `/ok 0003`, 거절 `/reject 0003 <이유>`, 단계 `/stage`, 다음 단계 `/advance`, 되돌리기 `/back <단계> <이유>`.
+Hermes 내장 `/approve` 는 위험 명령 허락용이라 operator 승인 대기와 다르다.
 
 사용자가 "승인해 줘"라고 하면 **네가 치지 말고** 사용자가 자기 터미널에서 실행할 명령을 보여 줘라:
 

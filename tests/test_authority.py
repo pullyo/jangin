@@ -81,31 +81,31 @@ class CliTests(Base):
         self.assertEqual(self.cli('pending', 'approve', '0001', '--no-send', tty=True).returncode, 0)
         ticket = next((self.project / '.operator' / 'approved').glob('0001-*.md')).read_text(encoding='utf-8')
         self.assertIn('decided_by: terminal', ticket)
-        self.assertIn('사람의 결정 경로: terminal, plugin', self.cli('status').stdout)
+        self.assertIn('사람의 결정 경로: terminal, local, messenger', self.cli('status').stdout)
 
-    def test_plugin_only_project_refuses_even_a_real_terminal(self):
-        self.guard_json(human_via=['plugin'])
+    def test_hermes_project_refuses_even_a_real_terminal(self):
+        self.guard_json(human_via=['local', 'messenger'])
         for args in [('pending', 'approve', '0001'), ('pending', 'reject', '0001', '--reason', 'x'), ('stage', 'set', 'learn'),
                      ('serve',), ('telegram',)]:
             with self.subTest(args=args):
                 r = self.cli(*args, tty=True)
                 self.assertEqual(r.returncode, 7, r.stdout + r.stderr)
         self.assertEqual(self.queue('pending'), ['0001'])
-        self.assertIn('사람의 결정 경로: plugin', self.cli('status').stdout)
+        self.assertIn('사람의 결정 경로: local, messenger', self.cli('status').stdout)
 
     def test_guard_blocks_calling_the_human_api_from_a_one_liner(self):
-        for cmd in ["python3 -c \"import op; op.pending_decide('x', '0001', 'approve', op.Authority('plugin'))\"",
-                    "python3 -c 'from op import *; stage_move(d, \"set\", Authority(\"plugin\"), to=\"operate\")'"]:
+        for cmd in ["python3 -c \"import op; op.pending_decide('x', '0001', 'approve', op.Authority('messenger'))\"",
+                    "python3 -c 'from op import *; stage_move(d, \"set\", Authority(\"messenger\"), to=\"operate\")'"]:
             with self.subTest(cmd=cmd):
                 self.assertEqual(self.cli('guard', 'check', cmd).returncode, 1)
 
 
 class ApiTests(Base):
     def test_plugin_authority_approves_and_rejects_through_the_api(self):
-        auth = op.Authority('plugin', 'hermes:telegram:42')
+        auth = op.Authority('messenger', 'hermes:telegram:42')
         res = op.pending_decide(self.od, '0001', 'approve', auth)
         self.assertEqual(res['meta']['status'], 'approved')
-        self.assertEqual(res['meta']['decided_by'], 'plugin:hermes:telegram:42')
+        self.assertEqual(res['meta']['decided_by'], 'messenger:hermes:telegram:42')
         self.assertIsNone(res['sent'])   # agent send mode: the agent runs op send later
         (self.project / 'e.md').write_text('---\ntype: post\nchannel: x\n---\n두 번째 초안입니다. 지금 써보세요 https://example.com\n', encoding='utf-8')
         self.cli('pending', 'add', 'e.md')
@@ -117,16 +117,17 @@ class ApiTests(Base):
         with self.assertRaises(op.OpError) as e:
             op.pending_decide(self.od, '0001', 'approve', None)
         self.assertEqual(e.exception.code, 7)
-        self.guard_json(human_via=['plugin'])
-        with self.assertRaises(op.OpError) as e:
-            op.pending_decide(self.od, '0001', 'approve', op.Authority('terminal'))
-        self.assertEqual(e.exception.code, 7)
+        self.guard_json(human_via=['messenger'])
+        for kind in ('terminal', 'local'):
+            with self.assertRaises(op.OpError) as e:
+                op.pending_decide(self.od, '0001', 'approve', op.Authority(kind))
+            self.assertEqual(e.exception.code, 7)
         with self.assertRaises(ValueError):
-            op.Authority('agent')
+            op.Authority('plugin')
         self.assertEqual(self.queue('pending'), ['0001'])
 
     def test_stage_move_checks_and_records_the_route(self):
-        auth = op.Authority('plugin', 'hermes:desktop')
+        auth = op.Authority('local', 'hermes:desktop')
         op.stage_move(self.od, 'set', auth, to='discover')
         with self.assertRaises(op.StageBlocked) as e:
             op.stage_move(self.od, 'advance', auth)
@@ -138,7 +139,7 @@ class ApiTests(Base):
         with self.assertRaises(op.OpError):
             op.stage_move(self.od, 'back', auth, to='discover')   # no reason
         st = json.loads((self.project / '.operator' / 'stage.json').read_text(encoding='utf-8'))
-        self.assertEqual(st['history'][-1]['by'], 'plugin:hermes:desktop')
+        self.assertEqual(st['history'][-1]['by'], 'local:hermes:desktop')
 
     def test_status_and_queue_reads_need_no_authority(self):
         s = op.status_summary(self.od)
@@ -150,7 +151,7 @@ class HumanSendApiTests(Base):
     send = 'human'
 
     def test_approval_through_the_api_runs_the_action_in_the_caller(self):
-        res = op.pending_decide(self.od, '0001', 'approve', op.Authority('plugin', 'hermes:cli'), secrets_env={})
+        res = op.pending_decide(self.od, '0001', 'approve', op.Authority('local', 'hermes:cli'), secrets_env={})
         self.assertEqual(res['sent'][0], 0)
         self.assertEqual(self.queue('sent'), ['0001'])
 
