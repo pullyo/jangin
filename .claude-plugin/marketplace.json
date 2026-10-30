@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "operator — 아이디어부터 운영까지 단계·승인·재개·검증을 강제하는 1인 개발자용 AI 직원 플러그인",
-    "version": "0.5.0"
+    "version": "0.6.0"
   },
   "plugins": [
     {
       "name": "operator",
       "source": "./",
       "description": "아이디어를 같이 다듬고, 만들고, 출시해서 굴린다. 단계 이동과 발송은 사람만 하고, 밖으로 나가는 명령은 훅이 막는다.",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "category": "productivity",
       "keywords": [
         "operator",

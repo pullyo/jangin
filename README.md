@@ -151,8 +151,10 @@ op telegram                          # optional: approve from your phone
   recursive deletes, `git push --force`, `DROP TABLE`.
 - The queue (`.operator/pending|approved|sent|rejected`) and the stage, milestone, metric and guard files change only through `op`.
   Writing to them with an edit tool or with `mv`/`cp`/`>`/`sed -i`/a Python one-liner is blocked. Reads are allowed.
-- Approving, rejecting, moving stages, storing secrets, connecting accounts and starting the approval servers refuse to run
-  without an interactive terminal. An agent cannot run them, even from a copied script.
+- Approving, rejecting, moving stages, storing secrets, connecting accounts and starting the approval servers need a human
+  decision route (an *authority*): an interactive terminal on the CLI, or the Hermes plugin receiving a command you typed
+  (`/approve`). The route is recorded on the ticket (`decided_by`) and in the stage history (`by`). No environment variable
+  turns an agent into a human.
 - In the default human send mode, the agent cannot run `op send` at all; the approved action runs in your process.
   In agent mode, `op send` runs only the action recorded on the approved ticket.
 - Reading `~/.config/operator/`, `security find-generic-password`, `printenv` and the like are blocked, including through the
@@ -162,6 +164,11 @@ op telegram                          # optional: approve from your phone
 
 **Not covered** — be aware:
 
+- **The terminal check is accident protection, not proof.** An agent's shell tool has no terminal, so ordinary calls fail,
+  but a fake terminal (`script -q /dev/null op …`) or a command hidden in a script file can get past the TTY check and the
+  guard (confirmed on macOS). To stop a determined agent running as your user, accept only the Hermes plugin route with
+  `"human_via": ["plugin"]` in `.operator/guard.json`, and use isolation tier 2 (docker) for real deploy accounts
+  ([docs/hermes-design.md](docs/hermes-design.md), section 4).
 - Tools without hooks only get the rules as instructions. The Keychain prompt and human send mode still keep tokens away from them.
 - The guard reads commands; paths built from variables (`cd $HOME/x`) are judged from the session folder only, and the guard only
   acts on calls that reach a folder with `.operator/`.

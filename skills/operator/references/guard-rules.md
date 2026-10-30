@@ -34,8 +34,15 @@
 `op stage advance/back/set`, `op secret set/rm`. 에이전트 세션에선 훅이 막는다.
 `op deliver` 는 `op send` 가 승인된 action 으로 실행할 때만 동작한다(직접 실행하면 거부).
 사람은 훅이 없는 자기 터미널에서 실행한다. Claude 데스크톱 앱이라면 Terminal 패널.
-훅과 별개로 이 명령들 자체가 **대화형 터미널(TTY)** 을 요구한다. 에이전트의 셸 도구에는 터미널이 없어
-스크립트를 복사해 돌려도 거부된다. 자동화에서 꼭 필요하면 사람이 `OPERATOR_ALLOW_NONINTERACTIVE_APPROVE=1` 을 직접 설정한다.
+훅과 별개로 이 명령들 자체가 사람의 결정 경로(authority)를 요구한다. CLI 에서는 **대화형 터미널(TTY)** 이다.
+에이전트의 셸 도구에는 터미널이 없어 보통은 거부되지만, 이것은 실수 방지이지 증명이 아니다: 가짜 터미널
+(`script -q /dev/null …`)이나 스크립트 파일로 감싼 호출은 TTY 검사와 가드를 통과할 수 있다. 0.5 의
+`OPERATOR_ALLOW_NONINTERACTIVE_APPROVE` 는 0.6 에서 없앴다(에이전트도 환경 변수를 설정할 수 있어서).
+
+`guard.json` 의 `human_via` 로 받을 경로를 고른다. 기본은 `["terminal", "plugin"]`. Hermes 플러그인을 쓰면
+`["plugin"]` 으로 터미널 경로를 끈다: 그러면 `op pending approve`, `op stage advance`, `op serve`, `op telegram` 은
+진짜 터미널에서도 거부되고, 결정은 사용자가 Hermes 에 친 `/approve`·`/advance` 로만 들어온다.
+파이썬 한 줄로 op 모듈의 `Authority(`, `pending_decide(`, `stage_move(` 를 부르는 것도 사람 전용 명령으로 막는다.
 
 ## 보호 경로 (`deny_paths`) — Write/Edit/apply_patch 대상
 

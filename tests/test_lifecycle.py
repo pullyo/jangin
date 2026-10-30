@@ -16,6 +16,8 @@ import unittest
 import urllib.parse
 import urllib.request
 
+from _tty import TtyProcess, run_tty
+
 OP = Path(__file__).resolve().parents[1] / 'skills' / 'operator' / 'scripts' / 'op.py'
 
 
@@ -61,10 +63,9 @@ class Base(unittest.TestCase):
         self.server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Fake)
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
         self.base = f'http://127.0.0.1:{self.server.server_address[1]}'
-        self.agent = {k: v for k, v in os.environ.items() if k != 'OPERATOR_ALLOW_NONINTERACTIVE_APPROVE'}
+        self.agent = dict(os.environ)
         self.agent.update(HOME=str(self.project.parent), OPERATOR_SECRET_BACKEND='file', OPERATOR_SECURITY_BIN='/nonexistent',
                           OPERATOR_X_API=self.base, OPERATOR_TELEGRAM_API=self.base, OPERATOR_WEBHOOK_URL=self.base + '/hook')
-        self.human = {**self.agent, 'OPERATOR_ALLOW_NONINTERACTIVE_APPROVE': '1'}
         args = ['init'] + (['--stage', self.stage] if self.stage else []) + ['--send', self.send]
         self.assertEqual(self.op(*args).returncode, 0)
 
@@ -74,8 +75,11 @@ class Base(unittest.TestCase):
         self.temp.cleanup()
 
     def op(self, *args, human=False, env=None):
-        return subprocess.run([sys.executable, '-I', str(OP), *args], cwd=self.project,
-                              env=env or (self.human if human else self.agent), capture_output=True, text=True)
+        """human=True runs op in a terminal (pty), the way a person types it. Otherwise a pipe, like an agent's shell tool."""
+        argv = [sys.executable, '-I', str(OP), *args]
+        if human:
+            return run_tty(argv, self.project, env or self.agent)
+        return subprocess.run(argv, cwd=self.project, env=env or self.agent, capture_output=True, text=True)
 
     def write(self, rel, text):
         p = self.project / rel
@@ -207,8 +211,8 @@ class HumanSendTests(Base):
 
 class SecretTests(Base):
     def test_file_backend_keeps_values_out_of_output_and_reach(self):
-        env = {**self.human, 'OPERATOR_SECRET_VALUE': 'tok-123'}
-        self.assertEqual(self.op('secret', 'set', 'X_USER_ACCESS_TOKEN', env=env).returncode, 0)
+        env = {**self.agent, 'OPERATOR_SECRET_VALUE': 'tok-123'}
+        self.assertEqual(self.op('secret', 'set', 'X_USER_ACCESS_TOKEN', human=True, env=env).returncode, 0)
         envfile = self.project.parent / '.config' / 'operator' / 'env'
         self.assertIn('X_USER_ACCESS_TOKEN=tok-123', envfile.read_text())
         self.assertEqual(oct(envfile.stat().st_mode & 0o777), '0o600')
@@ -233,8 +237,8 @@ class SecretTests(Base):
         log = self.project.parent / 'security.log'
         fake = self.write('fake-security', f'#!/bin/sh\necho "ARGS $*" >> "{log}"\ncat >> "{log}"\n')
         fake.chmod(0o755)
-        env = {**self.human, 'OPERATOR_SECURITY_BIN': str(fake), 'OPERATOR_SECRET_VALUE': 'kc-secret"9'}
-        self.assertEqual(self.op('secret', 'set', 'THREADS_ACCESS_TOKEN', '--keychain', env=env).returncode, 0)
+        env = {**self.agent, 'OPERATOR_SECURITY_BIN': str(fake), 'OPERATOR_SECRET_VALUE': 'kc-secret"9'}
+        self.assertEqual(self.op('secret', 'set', 'THREADS_ACCESS_TOKEN', '--keychain', human=True, env=env).returncode, 0)
         text = log.read_text()
         self.assertIn('ARGS -i', text)
         self.assertNotIn('kc-secret', text.splitlines()[0])
@@ -245,9 +249,8 @@ class SecretTests(Base):
 
 class XRefreshTests(Base):
     def test_expired_token_is_refreshed_once_and_stored(self):
-        env = {**self.human, 'OPERATOR_SECRET_VALUE': ''}
         for name, value in [('X_USER_ACCESS_TOKEN', 'old-access'), ('X_REFRESH_TOKEN', 'old-refresh'), ('X_CLIENT_ID', 'cid')]:
-            self.op('secret', 'set', name, env={**env, 'OPERATOR_SECRET_VALUE': value})
+            self.op('secret', 'set', name, human=True, env={**self.agent, 'OPERATOR_SECRET_VALUE': value})
         Fake.routes = {('POST', '/2/tweets'): [(401, {'title': 'Unauthorized'}), (201, {'data': {'id': '777'}})],
                        ('POST', '/2/oauth2/token'): [(200, {'access_token': 'new-access', 'refresh_token': 'new-refresh'})]}
         self.write('x.md', '---\ntype: post\nchannel: x\n---\n오늘 베타를 열었습니다. 지금 써보세요 https://example.com\n')
@@ -265,14 +268,14 @@ class XRefreshTests(Base):
         self.assertNotIn('new-access', r.stdout + ''.join(p.read_text() for p in (self.project / '.operator' / 'sent').glob('*.md')))
 
     def test_connect_x_runs_pkce_and_stores_tokens(self):
-        self.op('secret', 'set', 'X_CLIENT_ID', env={**self.human, 'OPERATOR_SECRET_VALUE': 'cid'})
+        self.op('secret', 'set', 'X_CLIENT_ID', human=True, env={**self.agent, 'OPERATOR_SECRET_VALUE': 'cid'})
         Fake.routes = {('POST', '/2/oauth2/token'): [(200, {'access_token': 'acc', 'refresh_token': 'ref'})]}
-        env = {**self.human, 'OPERATOR_X_AUTHORIZE': self.base + '/authorize'}
-        proc = subprocess.Popen([sys.executable, '-I', str(OP), 'connect', 'x', '--port', '0', '--no-browser', '--timeout', '20'],
-                                cwd=self.project, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        env = {**self.agent, 'OPERATOR_X_AUTHORIZE': self.base + '/authorize'}
+        proc = TtyProcess([sys.executable, '-I', str(OP), 'connect', 'x', '--port', '0', '--no-browser', '--timeout', '20'],
+                          self.project, env)
         try:
-            proc.stdout.readline()
-            url = proc.stdout.readline().strip()
+            proc.readline()
+            url = proc.readline().strip()
             q = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
             self.assertEqual(q['code_challenge_method'], ['S256'])
             self.assertIn('offline.access', q['scope'][0])
@@ -281,7 +284,7 @@ class XRefreshTests(Base):
             urllib.request.urlopen(q['redirect_uri'][0] + '?code=good&state=' + q['state'][0], timeout=5).read()
             out, err = proc.communicate(timeout=20)
         finally:
-            proc.kill()
+            proc.close()
         self.assertEqual(proc.returncode, 0, err)
         body = next(c for c in Fake.calls if c[1] == '/2/oauth2/token')[3]
         self.assertIn('code=good', body)
@@ -293,7 +296,7 @@ class TelegramTests(Base):
     def setUp(self):
         super().setUp()
         for name, value in [('TELEGRAM_BOT_TOKEN', 'bot123'), ('TELEGRAM_CHAT_ID', '42')]:
-            self.op('secret', 'set', name, env={**self.human, 'OPERATOR_SECRET_VALUE': value})
+            self.op('secret', 'set', name, human=True, env={**self.agent, 'OPERATOR_SECRET_VALUE': value})
         self.write('p.md', '---\ntype: post\nchannel: x\naction: echo posted-by-telegram\n---\n텔레그램으로 승인할 초안입니다 https://example.com\n')
         self.write('q.md', '---\ntype: post\nchannel: x\naction: echo second\n---\n두 번째 초안입니다. 거절될 예정 https://example.com\n')
         self.op('pending', 'add', 'p.md')

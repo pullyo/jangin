@@ -11,6 +11,8 @@ import sys
 import tempfile
 import unittest
 
+from _tty import TtyProcess, run_tty
+
 OP = Path(__file__).resolve().parents[1] / 'skills' / 'operator' / 'scripts' / 'op.py'
 
 
@@ -105,10 +107,13 @@ class ApprovalQueueIntegrityTests(unittest.TestCase):
         (self.project / 'n.md').write_text('---\ntype: post\nchannel: x\n---\n액션 없는 초안입니다. 지금 써보세요 https://example.com\n', encoding='utf-8')
         self.assertEqual(run(['pending', 'add', 'd.md'], self.project).returncode, 0)   # 0001 with action
         self.assertEqual(run(['pending', 'add', 'n.md'], self.project).returncode, 0)   # 0002 without action
-        self.human = {**os.environ, 'OPERATOR_ALLOW_NONINTERACTIVE_APPROVE': '1'}
 
     def tearDown(self):
         self.temp.cleanup()
+
+    def approve(self, *args):
+        """A person approving in their own terminal."""
+        return run_tty([sys.executable, '-I', str(OP), 'pending', 'approve', *args], self.project, dict(os.environ))
 
     def check(self, command):
         return run(['guard', 'check', command], self.project).returncode
@@ -131,7 +136,7 @@ class ApprovalQueueIntegrityTests(unittest.TestCase):
         self.assertTrue(list((self.project / '.operator' / 'pending').glob('0001-*.md')))
 
     def test_send_runs_only_the_approved_action(self):
-        self.assertEqual(subprocess.run([sys.executable, '-I', str(OP), 'pending', 'approve', '0001'], cwd=self.project, env=self.human, capture_output=True, text=True).returncode, 0)
+        self.assertEqual(self.approve('0001').returncode, 0)
         other = run(['send', '0001', '--', 'echo', 'SOMETHING-ELSE'], self.project)
         self.assertEqual(other.returncode, 6, other.stderr)
         self.assertTrue(list((self.project / '.operator' / 'approved').glob('0001-*.md')))
@@ -141,11 +146,11 @@ class ApprovalQueueIntegrityTests(unittest.TestCase):
         self.assertTrue(list((self.project / '.operator' / 'sent').glob('0001-*.md')))
 
     def test_ticket_without_action_cannot_be_sent_until_a_human_sets_one(self):
-        subprocess.run([sys.executable, '-I', str(OP), 'pending', 'approve', '0002'], cwd=self.project, env=self.human, capture_output=True, text=True)
+        self.approve('0002')
         self.assertEqual(run(['send', '0002', '--', 'echo', 'x'], self.project).returncode, 6)
         (self.project / 'n.md').write_text('---\ntype: post\nchannel: x\n---\n두 번째 액션 없는 초안입니다. https://example.com\n', encoding='utf-8')
         run(['pending', 'add', 'n.md'], self.project)   # 0003
-        subprocess.run([sys.executable, '-I', str(OP), 'pending', 'approve', '0003', '--action', 'echo human-chosen'], cwd=self.project, env=self.human, capture_output=True, text=True)
+        self.approve('0003', '--action', 'echo human-chosen')
         sent = run(['send', '0003'], self.project)
         self.assertEqual(sent.returncode, 0, sent.stderr)
         self.assertIn('human-chosen', sent.stdout)
@@ -153,7 +158,7 @@ class ApprovalQueueIntegrityTests(unittest.TestCase):
     def test_action_cannot_smuggle_queue_commands(self):
         (self.project / 'e.md').write_text('---\ntype: post\nchannel: x\naction: op pending approve 0002\n---\n승인 명령을 숨긴 초안입니다. https://example.com\n', encoding='utf-8')
         run(['pending', 'add', 'e.md'], self.project)   # 0003
-        subprocess.run([sys.executable, '-I', str(OP), 'pending', 'approve', '0003'], cwd=self.project, env=self.human, capture_output=True, text=True)
+        self.approve('0003')
         self.assertEqual(run(['send', '0003'], self.project).returncode, 6)
 
 
@@ -187,7 +192,7 @@ class DeliverServeFeedbackTests(unittest.TestCase):
         self.server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), _Recorder)
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
         base = f'http://127.0.0.1:{self.server.server_address[1]}'
-        self.env = {**os.environ, 'HOME': str(self.project), 'OPERATOR_ALLOW_NONINTERACTIVE_APPROVE': '1',
+        self.env = {**os.environ, 'HOME': str(self.project),
                     'OPERATOR_X_API': base, 'OPERATOR_THREADS_API': base, 'X_USER_ACCESS_TOKEN': 'secret-x-token',
                     'THREADS_USER_ID': '42', 'THREADS_ACCESS_TOKEN': 'secret-threads', 'OPERATOR_WEBHOOK_URL': base + '/hook'}
 
@@ -196,8 +201,11 @@ class DeliverServeFeedbackTests(unittest.TestCase):
         self.server.server_close()
         self.temp.cleanup()
 
-    def op(self, *args, env=None):
-        return subprocess.run([sys.executable, '-I', str(OP), *args], cwd=self.project, env=env or self.env, capture_output=True, text=True)
+    def op(self, *args, env=None, human=False):
+        argv = [sys.executable, '-I', str(OP), *args]
+        if human:   # in a terminal, the way a person types it
+            return run_tty(argv, self.project, env or self.env)
+        return subprocess.run(argv, cwd=self.project, env=env or self.env, capture_output=True, text=True)
 
     def add(self, channel, text='오늘 베타를 열었습니다. 지금 써보세요 https://example.com'):
         draft = self.project / f'{channel}.md'
@@ -210,7 +218,7 @@ class DeliverServeFeedbackTests(unittest.TestCase):
     def test_supported_channel_gets_deliver_action_and_send_posts_to_x(self):
         self.add('x')
         self.assertIn('action: op deliver 0001', self.ticket('pending', '0001'))
-        self.op('pending', 'approve', '0001')
+        self.op('pending', 'approve', '0001', human=True)
         sent = self.op('send', '0001')
         self.assertEqual(sent.returncode, 0, sent.stdout + sent.stderr)
         self.assertIn('x 게시 완료 id=111', sent.stdout)
@@ -222,14 +230,14 @@ class DeliverServeFeedbackTests(unittest.TestCase):
 
     def test_threads_uses_container_then_publish(self):
         self.add('threads')
-        self.op('pending', 'approve', '0001')
+        self.op('pending', 'approve', '0001', human=True)
         sent = self.op('send', '0001')
         self.assertEqual(sent.returncode, 0, sent.stdout + sent.stderr)
         self.assertEqual([c[0] for c in _Recorder.calls], ['/v1.0/42/threads', '/v1.0/42/threads_publish'])
 
     def test_deliver_cannot_run_outside_send_and_is_guarded(self):
         self.add('x')
-        self.op('pending', 'approve', '0001')
+        self.op('pending', 'approve', '0001', human=True)
         self.assertEqual(self.op('deliver', '0001').returncode, 6)
         self.assertEqual(_Recorder.calls, [])
         self.assertEqual(self.op('guard', 'check', 'op deliver 0001').returncode, 1)
@@ -238,7 +246,7 @@ class DeliverServeFeedbackTests(unittest.TestCase):
     def test_missing_token_fails_without_printing_secrets_and_ticket_stays_approved(self):
         env = {k: v for k, v in self.env.items() if k != 'X_USER_ACCESS_TOKEN'}
         self.add('x')
-        self.op('pending', 'approve', '0001', env=env)
+        self.op('pending', 'approve', '0001', env=env, human=True)
         sent = self.op('send', '0001', env=env)
         self.assertNotEqual(sent.returncode, 0)
         self.assertIn('X_USER_ACCESS_TOKEN', sent.stdout)
@@ -249,7 +257,7 @@ class DeliverServeFeedbackTests(unittest.TestCase):
 
     def test_reject_writes_feedback_for_the_next_draft(self):
         self.add('x')
-        self.op('pending', 'reject', '0001', '--reason', '톤이 딱딱함')
+        self.op('pending', 'reject', '0001', '--reason', '톤이 딱딱함', human=True)
         feedback = (self.project / '.operator' / 'feedback.md').read_text(encoding='utf-8')
         self.assertIn('톤이 딱딱함', feedback)
         self.assertIn('post/x', feedback)
@@ -259,10 +267,9 @@ class DeliverServeFeedbackTests(unittest.TestCase):
     def test_serve_needs_token_and_approves_through_the_same_rules(self):
         self.add('x')
         self.add('webhook', '웹훅으로 보낼 두 번째 초안입니다 https://example.com')
-        proc = subprocess.Popen([sys.executable, '-I', str(OP), 'serve', '--port', '0'], cwd=self.project, env=self.env,
-                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        proc = TtyProcess([sys.executable, '-I', str(OP), 'serve', '--port', '0'], self.project, self.env)
         try:
-            line = proc.stdout.readline()
+            line = proc.readline()
             self.assertIn('승인 페이지: http://127.0.0.1:', line)
             url = line.split('승인 페이지: ', 1)[1].strip()
             base, token = url.split('/?t=')
@@ -279,9 +286,7 @@ class DeliverServeFeedbackTests(unittest.TestCase):
             with self.assertRaises(Exception):
                 _ur.urlopen(_ur.Request(base + '/decide', data=b't=wrong&id=0001&d=approve', method='POST'), timeout=5)
         finally:
-            proc.kill()
-            proc.wait()
+            proc.close()
 
     def test_serve_refuses_without_a_terminal(self):
-        env = {k: v for k, v in self.env.items() if k != 'OPERATOR_ALLOW_NONINTERACTIVE_APPROVE'}
-        self.assertEqual(self.op('serve', env=env).returncode, 7)
+        self.assertEqual(self.op('serve').returncode, 7)
