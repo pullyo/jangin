@@ -11,7 +11,7 @@ import sys
 import tempfile
 import unittest
 
-OP = Path(__file__).resolve().parents[1] / 'skills' / 'operator' / 'scripts' / 'op.py'
+OP = Path(__file__).resolve().parents[1] / 'skills' / 'jangin' / 'scripts' / 'op.py'
 
 
 class HermesGuardTests(unittest.TestCase):
@@ -40,7 +40,7 @@ class HermesGuardTests(unittest.TestCase):
         self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
         answer = json.loads(r.stdout)
         self.assertEqual(answer['action'], 'block')
-        self.assertIn('operator 승인 게이트', answer['message'])
+        self.assertIn('jangin 승인 게이트', answer['message'])
 
     def register(self):
         sys.path.insert(0, str(OP.parent))

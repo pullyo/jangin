@@ -18,7 +18,7 @@ import urllib.request
 
 from _tty import TtyProcess, run_tty
 
-OP = Path(__file__).resolve().parents[1] / 'skills' / 'operator' / 'scripts' / 'op.py'
+OP = Path(__file__).resolve().parents[1] / 'skills' / 'jangin' / 'scripts' / 'op.py'
 
 
 class Fake(http.server.BaseHTTPRequestHandler):

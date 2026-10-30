@@ -1,6 +1,6 @@
 # 예약 실행 — 하루 한 번 pass 돌리기
 
-operator 는 혼자 돌지 않는다. 사용자가 시킬 때 한 pass 를 돈다. 매일 돌리려면 운영체제의 예약 기능으로
+jangin 은 혼자 돌지 않는다. 사용자가 시킬 때 한 pass 를 돈다. 매일 돌리려면 운영체제의 예약 기능으로
 에이전트를 비대화형으로 한 번 실행하게 한다. 예약 실행에서도 규칙은 그대로다.
 
 - 승인 큐에 올리는 데까지만 한다. 예약 실행에는 터미널이 없으므로 `op pending approve` 와 `op serve` 는 거부된다.
@@ -13,9 +13,9 @@ operator 는 혼자 돌지 않는다. 사용자가 시킬 때 한 pass 를 돈�
 
 ```bash
 # Claude Code
-claude -p "operator 스킬로 이 프로젝트의 오늘 pass 를 한 번 돌리고, 끝나면 op notify 를 실행해." --permission-mode acceptEdits
+claude -p "jangin 스킬로 이 프로젝트의 오늘 pass 를 한 번 돌리고, 끝나면 op notify 를 실행해." --permission-mode acceptEdits
 # Codex CLI
-codex exec "operator 스킬로 이 프로젝트의 오늘 pass 를 한 번 돌리고, 끝나면 op notify 를 실행해."
+codex exec "jangin 스킬로 이 프로젝트의 오늘 pass 를 한 번 돌리고, 끝나면 op notify 를 실행해."
 ```
 
 `--permission-mode acceptEdits` 는 파일 편집을 묻지 않게 한다. 셸 명령 허용 범위는 각 도구의 권한 설정을 따른다.
@@ -37,7 +37,7 @@ launchctl load ~/Library/LaunchAgents/local.operator.daily.plist
 ## Linux / macOS — cron
 
 ```cron
-0 9 * * * cd "/path/to/project" && claude -p "operator 스킬로 오늘 pass 를 한 번 돌리고 op notify 를 실행해." >> .operator/tmp/schedule.log 2>&1
+0 9 * * * cd "/path/to/project" && claude -p "jangin 스킬로 오늘 pass 를 한 번 돌리고 op notify 를 실행해." >> .operator/tmp/schedule.log 2>&1
 ```
 
 cron 은 로그인 셸 환경이 없으므로 `claude`/`codex` 의 절대 경로와 필요한 환경 변수(토큰 아님, PATH 등)를 적는다.
@@ -45,7 +45,7 @@ cron 은 로그인 셸 환경이 없으므로 `claude`/`codex` 의 절대 경로
 ## Windows — 작업 스케줄러
 
 ```powershell
-schtasks /Create /SC DAILY /ST 09:00 /TN "operator-daily" /TR "cmd /c cd /d D:\path\to\project && claude -p \"operator 스킬로 오늘 pass 를 한 번 돌리고 op notify 를 실행해.\" >> .operator\tmp\schedule.log 2>&1"
+schtasks /Create /SC DAILY /ST 09:00 /TN "jangin-daily" /TR "cmd /c cd /d D:\path\to\project && claude -p \"jangin 스킬로 오늘 pass 를 한 번 돌리고 op notify 를 실행해.\" >> .operator\tmp\schedule.log 2>&1"
 ```
 
 ## 휴대폰 알림 (ntfy)
@@ -54,7 +54,7 @@ schtasks /Create /SC DAILY /ST 09:00 /TN "operator-daily" /TR "cmd /c cd /d D:\p
 `~/.config/operator/env` 에 넣는다.
 
 ```
-OPERATOR_NTFY_TOPIC=operator-<임의의 긴 문자열>
+OPERATOR_NTFY_TOPIC=jangin-<임의의 긴 문자열>
 # 자체 서버를 쓰면
 OPERATOR_NTFY_SERVER=https://ntfy.example.com
 ```

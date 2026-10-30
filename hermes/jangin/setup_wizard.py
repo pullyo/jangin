@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
-"""operator setup — Operator(Hermes 배포판) 설정 마법사. Hermes 설정 마법사와 같은 모양으로 돈다.
+"""jangin setup — Jangin(Hermes 배포판) 설정 마법사. Hermes 설정 마법사와 같은 모양으로 돈다.
 
-`operator setup` 이 이 파일을 실행한다. 두 부분으로 나뉜다.
+`jangin setup` 이 이 파일을 실행한다. 두 부분으로 나뉜다.
 
   바깥(시스템 python3): 인자를 읽고, hermes_cli 를 가져올 수 있는 Hermes 파이썬을 찾아 `--inside` 로 자신을 다시 실행한다.
   안쪽(Hermes 파이썬): Hermes 마법사의 화면 부품(hermes_cli.setup 의 print_header, prompt, prompt_choice,
-                       prompt_yes_no, 왼쪽 화살표로 돌아가기)을 그대로 써서 operator 단계를 묻는다.
+                       prompt_yes_no, 왼쪽 화살표로 돌아가기)을 그대로 써서 jangin 단계를 묻는다.
 
 순서
   ☤ Hermes 기본 설정   원래 Hermes 마법사(모델·로그인, 터미널, 메신저, 도구)를 그대로 돌린다. 엔터 = 지금 값 유지
-  ◆ operator 플러그인  켜져 있는지 확인하고 꺼져 있으면 켠다
+  ◆ jangin 플러그인  켜져 있는지 확인하고 꺼져 있으면 켠다
   ◆ 프로젝트 폴더      /idea 로 만드는 프로젝트가 들어갈 폴더
   ◆ 승인 방식          새 프로젝트가 사람의 결정을 어디서 받을지 (데스크톱+메신저 / 메신저만)
-  ◆ 메신저 승인        operator 명령을 칠 수 있는 사람을 본인으로 좁힌다
+  ◆ 메신저 승인        jangin 명령을 칠 수 있는 사람을 본인으로 좁힌다
   ◆ 도구               컴퓨터 화면 조작, 브라우저 자동 조작, X 검색, 칸반을 켜고 끈다 (Hermes `tools` 명령으로)
   ◆ 두 번째 잠금       플러그인이 꺼져도 막는 셸 훅
 
-`operator setup --operator-only` 는 Hermes 기본 설정을 건너뛰고, `operator setup --hermes` 는 원래 Hermes 마법사만 연다.
+`jangin setup --jangin-only` 는 Hermes 기본 설정을 건너뛰고, `jangin setup --hermes` 는 원래 Hermes 마법사만 연다.
 """
 import argparse
 import glob
@@ -28,16 +28,16 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OP_PY_CANDIDATES = (os.path.join(HERE, "skill", "scripts", "op.py"),
-                    os.path.join(HERE, "..", "..", "skills", "operator", "scripts", "op.py"))
+                    os.path.join(HERE, "..", "..", "skills", "jangin", "scripts", "op.py"))
 APPROVAL_CHOICES = (["local", "messenger"], ["messenger"])
 APPROVAL_LABELS = ("데스크톱 앱과 메신저 둘 다 (편함)", "메신저만 (엄격, 메신저 연결 필요)")
 
 # (Hermes 도구 이름, 화면 이름, 권장, 설명). 권장은 설명에만 쓰고, 엔터는 지금 값을 유지한다.
 TOOL_CHOICES = (
     ("computer_use", "컴퓨터 화면 조작", False,
-     "이 맥의 앱 화면을 클릭하고 입력합니다. operator 가드를 거치지 않아 승인 없이 게시·배포 버튼을 누를 수 있습니다. 권장: 끄기."),
+     "이 맥의 앱 화면을 클릭하고 입력합니다. jangin 가드를 거치지 않아 승인 없이 게시·배포 버튼을 누를 수 있습니다. 권장: 끄기."),
     ("browser", "브라우저 자동 조작", True,
-     "만든 사이트를 열어 확인할 때 씁니다. 웹사이트의 게시 버튼도 누를 수 있고 operator 가드는 클릭을 검사하지 않습니다. 권장: 켜기, 대신 결과를 확인하세요."),
+     "만든 사이트를 열어 확인할 때 씁니다. 웹사이트의 게시 버튼도 누를 수 있고 jangin 가드는 클릭을 검사하지 않습니다. 권장: 켜기, 대신 결과를 확인하세요."),
     ("x_search", "X 검색", True,
      "검증·배우기 단계에서 사람들이 실제로 남긴 글을 찾습니다. xAI 로그인이 필요할 수 있습니다. 권장: 켜기."),
     ("kanban", "칸반 (여러 작업 나눠 돌리기)", False,
@@ -53,8 +53,13 @@ def hermes_home(profile):
 
 
 def settings_path(home):
-    """플러그인(commands.Plugin)과 같이 쓰는 설정 파일."""
-    return os.path.join(home, "plugin-data", "operator", "settings.json")
+    """플러그인(commands.Plugin)과 같이 쓰는 설정 파일. 예전 이름(plugin-data/operator)에만 있으면 옮긴다."""
+    new = os.path.join(home, "plugin-data", "jangin", "settings.json")
+    old = os.path.join(home, "plugin-data", "operator", "settings.json")
+    if not os.path.exists(new) and os.path.isfile(old):
+        os.makedirs(os.path.dirname(new), exist_ok=True)
+        os.replace(old, new)
+    return new
 
 
 def load_json(path, default):
@@ -172,7 +177,7 @@ class HermesBackend:
         return subprocess.call([self.bin, "-p", self.profile, "setup"] + ([section] if section else []))
 
     def enable_plugin(self):
-        return subprocess.call([self.bin, "-p", self.profile, "plugins", "enable", "operator"]) == 0
+        return subprocess.call([self.bin, "-p", self.profile, "plugins", "enable", "jangin"]) == 0
 
     def set_env(self, key, value):
         from hermes_cli.config import save_env_value
@@ -198,7 +203,7 @@ class HermesBackend:
         c = load_config()
         hooks = c.get("hooks") if isinstance(c.get("hooks"), dict) else {}
         lst = hooks.get("pre_tool_call") if isinstance(hooks.get("pre_tool_call"), list) else []
-        # 예전 형식(맨 `python3`)의 operator 훅은 지우고 새 명령 하나만 남긴다
+        # 예전 형식(맨 `python3`)의 jangin 훅은 지우고 새 명령 하나만 남긴다
         stale = [h for h in lst if isinstance(h, dict) and is_operator_guard(h.get("command")) and h.get("command") != cmd]
         if stale:
             lst = [h for h in lst if h not in stale]
@@ -233,18 +238,18 @@ class OperatorSetup:
             self.hermes_base()
         else:
             self.summary["모델"] = f"{self.info.get('model') or '기본값'} ({self.info.get('provider') or '로그인 없음'})"
-        self.ui.banner("│             ☤ Operator Setup                            │",
+        self.ui.banner("│             ☤ Jangin Setup                            │",
                        "├─────────────────────────────────────────────────────────┤",
                        "│  idea → build → ship. Hermes settings stay as they are. │",
                        "│  Press Ctrl+C at any time to exit.                      │")
         self.ui.info(f"설정 파일:  {settings_path(self.home)}",
                      "질문마다 지금 값이 기본으로 보입니다. 엔터를 누르면 그대로 유지됩니다.",
                      "왼쪽 화살표로 이전 질문, Esc 로 취소합니다.")
-        self.ui.run_steps([("operator 플러그인", self.plugin), ("프로젝트 폴더", self.folder), ("승인 방식", self.approval),
+        self.ui.run_steps([("jangin 플러그인", self.plugin), ("프로젝트 폴더", self.folder), ("승인 방식", self.approval),
                            ("메신저 승인", self.messenger), ("도구", self.tools), ("두 번째 잠금", self.guard_hook)])
         self.save()
-        self.ui.header("Operator 설정 완료")
-        for k in ("모델", "operator 플러그인", "프로젝트 폴더", "승인 방식", "메신저 승인", "도구", "두 번째 잠금"):
+        self.ui.header("Jangin 설정 완료")
+        for k in ("모델", "jangin 플러그인", "프로젝트 폴더", "승인 방식", "메신저 승인", "도구", "두 번째 잠금"):
             if k in self.summary:
                 self.ui.success(f"{k}: {self.summary[k]}")
         self.ui.info(None, "다음: Hermes 앱에서 새 대화를 열고  /idea 동네 빵집 예약 페이지  처럼 시작하세요.",
@@ -266,19 +271,19 @@ class OperatorSetup:
         self.summary["모델"] = f"{self.info.get('model') or '기본값'} ({self.info.get('provider') or '로그인 없음'})"
 
     def plugin(self):
-        self.ui.header("operator 플러그인")
-        if "operator" in (self.info.get("plugins") or []):
+        self.ui.header("jangin 플러그인")
+        if "jangin" in (self.info.get("plugins") or []):
             self.ui.info("켜져 있습니다.")
         elif self.h.enable_plugin():
-            self.ui.success("operator 플러그인을 켰습니다.")
+            self.ui.success("jangin 플러그인을 켰습니다.")
         else:
-            self.ui.warn("켜지 못했습니다. 나중에 `operator plugins enable operator` 로 켜 주세요.")
-        self.summary["operator 플러그인"] = "켜짐"
+            self.ui.warn("켜지 못했습니다. 나중에 `jangin plugins enable jangin` 으로 켜 주세요.")
+        self.summary["jangin 플러그인"] = "켜짐"
 
     def folder(self):
         self.ui.header("프로젝트 폴더")
         self.ui.info("/idea 로 만드는 프로젝트가 이 폴더 아래에 하나씩 생깁니다.")
-        cur = self.s.get("folder") or os.path.join(os.path.expanduser("~"), "operator-projects")
+        cur = self.s.get("folder") or os.path.join(os.path.expanduser("~"), "jangin-projects")
         path = os.path.abspath(os.path.expanduser(self.ui.ask("프로젝트 폴더", cur) or cur))
         os.makedirs(path, exist_ok=True)
         self.s["folder"] = path
@@ -309,7 +314,7 @@ class OperatorSetup:
                 self.h.run_setup("gateway")
                 info = self.info = self.h.info()
             elif not strict:
-                self.ui.info("나중에 연결하려면: operator setup gateway  (텔레그램이 가장 쉽습니다)")
+                self.ui.info("나중에 연결하려면: jangin setup gateway  (텔레그램이 가장 쉽습니다)")
         if not info.get("messengers"):
             self.summary["메신저 승인"] = "메신저 없음" + (" — 메신저만 승인이라 지금은 승인할 수 없음" if strict else "")
             return
@@ -319,18 +324,18 @@ class OperatorSetup:
             self.ui.info(f"텔레그램 허용 사용자: {info['telegram_users']}")
         cur = info.get("operator_users") or ""
         guess = cur or (info.get("telegram_users") if "," not in (info.get("telegram_users") or "") else "")
-        self.ui.info("operator 명령(/ok, /advance 등)을 칠 수 있는 사람을 본인 한 명으로 좁히는 것을 권합니다.")
-        users = (self.ui.ask("operator 명령 허용 사용자 ID", guess or None) or "").strip()
+        self.ui.info("jangin 명령(/ok, /advance 등)을 칠 수 있는 사람을 본인 한 명으로 좁히는 것을 권합니다.")
+        users = (self.ui.ask("jangin 명령 허용 사용자 ID", guess or None) or "").strip()
         if users and users != cur:
             self.h.set_env("OPERATOR_ALLOWED_USERS", users)
-            self.ui.success("저장했습니다. `operator gateway restart` 후 적용됩니다.")
+            self.ui.success("저장했습니다. `jangin gateway restart` 후 적용됩니다.")
         self.summary["메신저 승인"] = f"{', '.join(info['messengers'])}, 허용 사용자 {users or '지정 안 함'}"
 
     def tools(self):
         self.ui.header("도구")
         states = self.h.tool_states("cli")
         if not states:
-            self.ui.warn("Hermes 도구 목록을 읽지 못해 건너뜁니다. 나중에 `operator tools` 로 바꿀 수 있습니다.")
+            self.ui.warn("Hermes 도구 목록을 읽지 못해 건너뜁니다. 나중에 `jangin tools` 로 바꿀 수 있습니다.")
             self.summary["도구"] = "건너뜀"
             return
         if states.get("web") is False:
@@ -348,12 +353,12 @@ class OperatorSetup:
                 if self.h.set_tool(name, want):
                     self.ui.success(f"{label}: {'켰습니다' if want else '껐습니다'}")
                 else:
-                    self.ui.warn(f"{label}: 바꾸지 못했습니다. `operator tools {'enable' if want else 'disable'} {name}`")
+                    self.ui.warn(f"{label}: 바꾸지 못했습니다. `jangin tools {'enable' if want else 'disable'} {name}`")
                     want = cur
             if want:
                 on_list.append(label)
         if "브라우저 자동 조작" in on_list or "컴퓨터 화면 조작" in on_list:
-            self.ui.info("참고: 브라우저와 컴퓨터 조작은 operator 승인 큐를 거치지 않습니다. 결과를 꼭 확인하세요.")
+            self.ui.info("참고: 브라우저와 컴퓨터 조작은 jangin 승인 큐를 거치지 않습니다. 결과를 꼭 확인하세요.")
         self.summary["도구"] = "켜짐 " + (", ".join(on_list) if on_list else "없음 (선택 도구 기준)")
 
     def guard_hook(self):
@@ -367,9 +372,9 @@ class OperatorSetup:
             self.ui.info("이미 걸려 있습니다.")
             self.summary["두 번째 잠금"] = "켜짐"
             return
-        self.ui.info("기본 잠금은 operator 플러그인입니다. 셸 훅은 플러그인이 꺼지거나 깨졌을 때를 위한 두 번째 잠금입니다.")
+        self.ui.info("기본 잠금은 jangin 플러그인입니다. 셸 훅은 플러그인이 꺼지거나 깨졌을 때를 위한 두 번째 잠금입니다.")
         if self.ui.yes("셸 훅을 걸까요?", True,
-                       description="기본 잠금은 operator 플러그인입니다. 셸 훅을 더하면 플러그인이 꺼지거나 깨져도 "
+                       description="기본 잠금은 jangin 플러그인입니다. 셸 훅을 더하면 플러그인이 꺼지거나 깨져도 "
                                    "배포·게시·삭제 명령을 막습니다. op.py 를 못 찾으면 막는 쪽으로 동작합니다."):
             try:
                 self.h.add_guard_hook(cmd)
@@ -395,7 +400,7 @@ def find_hermes_python(agent_dir):
 
 
 def repair_hook():
-    """이 프로필에 걸린 operator 셸 훅이 다른 위치(복사 원본 프로필)의 op.py 를 가리키면 이 프로필 것으로 바꾼다.
+    """이 프로필에 걸린 jangin 셸 훅이 다른 위치(복사 원본 프로필)의 op.py 를 가리키면 이 프로필 것으로 바꾼다.
     훅이 없으면 아무것도 하지 않는다."""
     from hermes_cli.config import load_config
     hooks = (load_config().get("hooks") or {}).get("pre_tool_call") or []
@@ -423,32 +428,42 @@ def inside(args):
 
 
 def main(argv=None):
-    p = argparse.ArgumentParser(prog="operator setup", description="Operator 설정 마법사")
+    p = argparse.ArgumentParser(prog="jangin setup", description="Jangin 설정 마법사")
     p.add_argument("--profile", default=os.environ.get("OPERATOR_HERMES_PROFILE", "default"))
     p.add_argument("--hermes", action="store_true", help="원래 Hermes 설정 마법사만 연다")
-    p.add_argument("--operator-only", action="store_true", help="Hermes 기본 설정을 건너뛰고 operator 단계만")
+    p.add_argument("--jangin-only", "--operator-only", dest="operator_only", action="store_true",
+                   help="Hermes 기본 설정을 건너뛰고 Jangin 단계만")
     p.add_argument("--inside", action="store_true", help=argparse.SUPPRESS)
     p.add_argument("--repair-hook", action="store_true", help=argparse.SUPPRESS)
+    p.add_argument("--display-name", help=argparse.SUPPRESS)
     p.add_argument("--home", help=argparse.SUPPRESS)
     args, rest = p.parse_known_args(argv)
     if args.inside:
+        if args.display_name:
+            from hermes_cli.profiles import set_profile_display_name
+            set_profile_display_name(args.profile, args.display_name)
+            print(f"  + 표시 이름: {args.display_name}")
         if args.repair_hook:
             return repair_hook()
+        if args.display_name:
+            return 0
         return inside(args)
     hermes_bin = shutil.which("hermes") or os.path.join(os.path.expanduser("~"), ".local", "bin", "hermes")
     if args.hermes:
         return subprocess.call([hermes_bin, "-p", args.profile, "setup", *rest])
-    if args.repair_hook:   # install.sh 가 부른다: 터미널 없이, Hermes 파이썬 안에서
+    if args.repair_hook or args.display_name:   # install.sh 가 부른다: 터미널 없이, Hermes 파이썬 안에서
         agent_dir = os.environ.get("HERMES_AGENT_DIR") or os.path.join(os.path.expanduser("~"), ".hermes", "hermes-agent")
         py = find_hermes_python(agent_dir)
         if not py:
-            print("  ! Hermes 파이썬을 찾지 못해 셸 훅 경로를 고치지 못했다. `operator setup` 의 두 번째 잠금에서 다시 걸어 주세요.")
+            print("  ! Hermes 파이썬을 찾지 못해 셸 훅 경로를 고치지 못했다. `jangin setup` 의 두 번째 잠금에서 다시 걸어 주세요.")
             return 1
         home = args.home or hermes_home(args.profile)
         env = dict(os.environ, PYTHONPATH=agent_dir, HERMES_HOME=home)
-        return subprocess.call([py, os.path.abspath(__file__), "--inside", "--repair-hook"], cwd=agent_dir, env=env)
+        cmd = [py, os.path.abspath(__file__), "--inside", "--profile", args.profile]
+        cmd += (["--repair-hook"] if args.repair_hook else []) + (["--display-name", args.display_name] if args.display_name else [])
+        return subprocess.call(cmd, cwd=agent_dir, env=env)
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
-        print("operator setup 은 질문에 답하는 대화형 마법사라 터미널에서 실행해야 합니다.")
+        print("jangin setup 은 질문에 답하는 대화형 마법사라 터미널에서 실행해야 합니다.")
         return 2
     agent_dir = os.environ.get("HERMES_AGENT_DIR") or os.path.join(os.path.expanduser("~"), ".hermes", "hermes-agent")
     py = find_hermes_python(agent_dir)
@@ -456,7 +471,7 @@ def main(argv=None):
         print("Hermes 파이썬을 찾지 못했습니다. Hermes Agent 를 먼저 설치하거나 `hermes update` 를 실행해 주세요.")
         return 1
     env = dict(os.environ, PYTHONPATH=agent_dir, HERMES_HOME=hermes_home(args.profile), OPERATOR_HERMES_BIN=hermes_bin)
-    cmd = [py, os.path.abspath(__file__), "--inside", "--profile", args.profile] + (["--operator-only"] if args.operator_only else [])
+    cmd = [py, os.path.abspath(__file__), "--inside", "--profile", args.profile] + (["--jangin-only"] if args.operator_only else [])
     os.chdir(agent_dir)
     os.execve(py, cmd, env)
 

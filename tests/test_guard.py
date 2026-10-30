@@ -1,4 +1,4 @@
-"""op guard: which operator projects a tool call can reach, and that each one's rules apply.
+"""op guard: which jangin projects a tool call can reach, and that each one's rules apply.
 
 Run from the repository root:  python3 -m unittest discover -s tests
 Every case feeds the hook JSON through the real `op.py guard` process, the way Claude Code / Codex do.
@@ -13,7 +13,7 @@ import unittest
 
 from _tty import TtyProcess, run_tty
 
-OP = Path(__file__).resolve().parents[1] / 'skills' / 'operator' / 'scripts' / 'op.py'
+OP = Path(__file__).resolve().parents[1] / 'skills' / 'jangin' / 'scripts' / 'op.py'
 
 
 def run(args, cwd, stdin=None):

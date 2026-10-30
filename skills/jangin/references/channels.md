@@ -34,7 +34,7 @@ op deliver --check                 # 채널별 준비 상태
 op secret rm THREADS_ACCESS_TOKEN
 ```
 
-- **macOS 기본은 키체인**이다 (`security`, 서비스 이름 `operator`). 어떤 프로그램도 묻지 않고 읽을 수 없게 저장하므로
+- **macOS 기본은 키체인**이다 (`security`, 서비스 이름 `operator` — 엔진 내부 이름이라 그대로). 어떤 프로그램도 묻지 않고 읽을 수 없게 저장하므로
   읽을 때마다 macOS 가 허락을 묻는다. **"항상 허용"은 누르지 않는다.** `op serve`/`op telegram` 은 시작할 때 한 번에 읽어
   메모리에 들고 있으므로, 시작할 때만 허락하면 된다.
 - 다른 운영체제나 `--file` 은 `~/.config/operator/env` (권한 600). 이름 목록은 같은 폴더의 `secrets.json` (값 없음).

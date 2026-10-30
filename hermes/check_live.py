@@ -1,8 +1,8 @@
 """실제 Hermes 로 플러그인을 확인한다 (수동). Hermes 코드와 사용자의 ~/.hermes 는 건드리지 않는다.
 
   H=$(mktemp -d)/hermes-home; mkdir -p "$H"
-  sh hermes/operator/install.sh --home "$H"            # 시험용 HERMES_HOME 에 설치 + plugins enable
-  HERMES_HOME="$H" hermes plugins doctor operator      # 로더·매니페스트·등록 검사
+  sh hermes/jangin/install.sh --home "$H"            # 시험용 HERMES_HOME 에 설치 + plugins enable
+  HERMES_HOME="$H" hermes plugins doctor jangin      # 로더·매니페스트·등록 검사
   PY=$(ls -d "$H"/installs/*/environments/*/venv/bin/python3 | head -1)   # 그 HERMES_HOME 의 Hermes 파이썬
   mkdir -p /tmp/op-projects /tmp/op-home
   HERMES_AGENT_DIR=~/.hermes/hermes-agent HOME=/tmp/op-home HERMES_HOME="$H" "$PY" hermes/check_live.py /tmp/op-projects discover.md
@@ -16,9 +16,9 @@ from hermes_cli import plugins
 from hermes_cli.plugin_command_dispatch import invoke_plugin_command
 
 cmds = plugins.get_plugin_commands()
-mine = sorted(k for k, v in cmds.items() if v.get("plugin") == "operator")
+mine = sorted(k for k, v in cmds.items() if v.get("plugin") == "jangin")
 print("registered:", mine)
-missing = {"idea", "project", "stage", "advance", "back", "inbox", "ok", "reject", "setup", "operator"} - set(mine)
+missing = {"idea", "project", "stage", "advance", "back", "inbox", "ok", "reject", "setup", "jangin"} - set(mine)
 print("missing:", sorted(missing))
 
 def call(name, arg, source=None, platform="desktop"):
@@ -34,7 +34,7 @@ open(os.path.join(proj, ".operator/stages/discover.md"), "w").write(open(sys.arg
 call("stage", "")
 call("advance", "")
 print("history by:", json.load(open(os.path.join(proj, ".operator/stage.json")))["history"][-1]["by"])
-op_py = os.path.join(os.environ["HERMES_HOME"], "plugins/operator/skill/scripts/op.py")
+op_py = os.path.join(os.environ["HERMES_HOME"], "plugins/jangin/skill/scripts/op.py")
 open(os.path.join(proj, "r.md"), "w").write("---\ntype: research\n---\n" + "조사 내용 " * 50 + "\nhttps://a.example https://b.example https://c.example\n")
 print(subprocess.run([sys.executable, "-I", op_py, "pending", "add", "r.md"], cwd=proj, capture_output=True, text=True).stdout.strip().splitlines()[-1])
 call("inbox", "")

@@ -1,37 +1,37 @@
-# operator × Hermes 설계
+# jangin × Hermes 설계
 
-상태: M1–M3 구현 (2026-10-30, `hermes-distro` 브랜치, operator 0.6.0). 기준 Hermes Agent v0.22.5 (2026.9.24).
+상태: M1–M3 구현 (2026-10-30, `hermes-distro` 브랜치, jangin 0.6.0). 기준 Hermes Agent v0.22.5 (2026.9.24).
 근거는 Hermes 소스 읽기와, 시험용 HERMES_HOME 에서 돌린 실제 Hermes 의 플러그인 로더·명령 디스패치·훅 시험이다.
 무엇이 확인됐고 무엇이 아직인지는 7절에 있다.
 
 ## 1. 왜 Hermes 인가
 
 [VISION.md](../VISION.md) 의 목표는 일반 사용자도 쓰는 "구상 → 개발 → 배포 관리" 전용 AI 비서다.
-지금 operator 는 터미널 명령을 알아야 쓸 수 있다. Hermes Agent 는 그 빈자리를 이미 채우고 있다.
+지금 jangin 은 터미널 명령을 알아야 쓸 수 있다. Hermes Agent 는 그 빈자리를 이미 채우고 있다.
 
 | 필요한 것 | Hermes 가 이미 가진 것 |
 |---|---|
 | 앱 | Hermes Desktop (맥, 윈도우), 안드로이드(Termux) |
 | 메신저 대화 | 텔레그램, 디스코드, 슬랙, 왓츠앱, 시그널 게이트웨이 |
 | 생각하는 손 | Hermes 자체 에이전트. Claude Code·Codex 설치가 필요 없다 |
-| 스킬 | Agent Skills 표준 호환. operator SKILL.md 를 그대로 읽는다 |
+| 스킬 | Agent Skills 표준 호환. jangin SKILL.md 를 그대로 읽는다 |
 | 실행 전 차단 | 셸 훅 `pre_tool_call` (exit 2 또는 block JSON, `fail_closed`) — CLI, 게이트웨이, Desktop 모두 |
-| 사람 확인 | 훅이 `{"action":"approve"}` 를 돌려주면 Hermes 의 사람 승인 화면으로 넘어간다 (텔레그램·디스코드·슬랙 버튼). 단 yolo, `approvals.mode: off`, cron 의 `approve` 모드, 저장된 "항상 허용"이면 자동 통과한다 — operator 는 이 경로를 쓰지 않고 block 만 쓴다 |
+| 사람 확인 | 훅이 `{"action":"approve"}` 를 돌려주면 Hermes 의 사람 승인 화면으로 넘어간다 (텔레그램·디스코드·슬랙 버튼). 단 yolo, `approvals.mode: off`, cron 의 `approve` 모드, 저장된 "항상 허용"이면 자동 통과한다 — jangin 은 이 경로를 쓰지 않고 block 만 쓴다 |
 | 사람만 치는 명령 | 플러그인 `ctx.register_command` → 사용자가 치는 `/명령`, 게이트웨이 프로세스에서 플러그인 코드가 처리. 메신저에서 오면 `source.user_id` 가 붙는다 |
 | 예약 | 내장 cron, 결과를 메신저로 전달. cron 의 위험 명령은 기본 거부(`cron_mode: deny`) |
 | 격리 | Docker 터미널 백엔드, `docker_volumes` 에 `:ro` 마운트 |
 
-그래서 앱·메신저·예약·모델 실행은 Hermes 에 맡기고, operator 는 **단계, 승인 큐, 검증, 차단, 사람만 하는 단계 이동과 발송**에 집중한다.
+그래서 앱·메신저·예약·모델 실행은 Hermes 에 맡기고, jangin 은 **단계, 승인 큐, 검증, 차단, 사람만 하는 단계 이동과 발송**에 집중한다.
 Claude Code, Codex, Cursor, Gemini CLI 지원은 그대로 둔다. Hermes 는 일반 사용자용 기본 경로가 된다.
 
 ## 2. 사용자가 겪는 흐름
 
 1. Hermes Desktop 을 설치하고 처음 설정(모델 로그인)을 마친다.
-2. 설치: `curl -fsSL https://raw.githubusercontent.com/pullyo/operator-skill/main/install.sh | sh` — Hermes 가 없으면 설치, operator 받기,
-   기본 프로필을 `--clone-all` 로 복사해 `operator` 프로필 생성(OAuth 는 Hermes 가 복사하지 않고 이어받게 함), 플러그인·스킬·SOUL.md 설치.
-   쓰던 Hermes(기본 프로필)는 건드리지 않는다. 업데이트는 `operator update`.
-   `hermes plugins install pullyo/operator-skill/hermes/operator` 는 하위 폴더만 받아서 스킬(op.py)이 빠진다 — 7절.
-3. 터미널에서 `operator setup` — 원래 Hermes 마법사(모델·터미널·메신저·도구)를 먼저 그대로 돌리고, 이어서 한국어 operator 단계: 플러그인, 프로젝트 폴더, 승인 방식, 메신저 승인 허용 사용자, 두 번째 잠금(셸 훅).
+2. 설치: `curl -fsSL https://raw.githubusercontent.com/pullyo/jangin/main/install.sh | sh` — Hermes 가 없으면 설치, jangin 받기,
+   기본 프로필을 `--clone-all` 로 복사해 `jangin` 프로필 생성(OAuth 는 Hermes 가 복사하지 않고 이어받게 함), 플러그인·스킬·SOUL.md 설치.
+   쓰던 Hermes(기본 프로필)는 건드리지 않는다. 업데이트는 `jangin update`.
+   `hermes plugins install pullyo/jangin/hermes/jangin` 은 하위 폴더만 받아서 스킬(op.py)이 빠진다 — 7절.
+3. 터미널에서 `jangin setup` — 원래 Hermes 마법사(모델·터미널·메신저·도구)를 먼저 그대로 돌리고, 이어서 한국어 jangin 단계: 플러그인, 프로젝트 폴더, 승인 방식, 메신저 승인 허용 사용자, 두 번째 잠금(셸 훅).
    대화창의 `/setup` 은 폴더·지금 프로젝트·토큰 읽기(`/setup unlock`). (하루 상한은 M4)
 4. `/idea 동네 빵집 예약 페이지` — 프로젝트 폴더를 만들고 발견 단계가 시작된다. 에이전트가 한 번에 하나씩 묻는다.
 5. 발견 문서가 채워지면 에이전트가 "다음 단계로 넘길 준비가 됐습니다"라고 알린다. 사용자가 `/advance`.
@@ -54,25 +54,25 @@ Claude Code, Codex, Cursor, Gemini CLI 지원은 그대로 둔다. Hermes 는 �
 | `/inbox [번호]` | 승인 대기 | |
 | `/ok <번호>` · `/reject <번호> <이유>` | 결정. human 방식이면 승인 즉시 플러그인에서 발송 | ✓ |
 | `/setup` | 폴더, 지금 프로젝트, `/setup unlock` (키체인에서 토큰을 메모리로) | |
-| `/operator <하위 명령>` | 위 명령을 한 이름으로 (status·queue·approve 별칭 포함) | |
+| `/jangin <하위 명령>` | 위 명령을 한 이름으로 (status·queue·approve 별칭 포함) | |
 
 ## 3. 구조
 
 ```
  Hermes 게이트웨이 프로세스 (사람의 손)
- ├── operator 플러그인
- │     /idea /project /stage /advance /back /inbox /ok /reject /setup /operator
+ ├── jangin 플러그인
+ │     /idea /project /stage /advance /back /inbox /ok /reject /setup /jangin
  │     승인 시 발송·배포 실행 (카드 게시·상태 확인·되돌리기 티켓은 M5)
  │     pre_tool_call 훅: op 의 가드 규칙 (ctx.session_cwd() 로 세션 폴더를 안다)
  │     토큰: /setup unlock 또는 첫 /ok 때 키체인에서 한 번 읽어 메모리에만 (허락 창은 그때)
  │     cron 등록: 매일 pass, 주간 회고 (M4)
  └── Hermes 에이전트 (생각하는 손)
-       operator 스킬을 읽고 구상 질문, 조사, 문서, 코딩, 검사
+       jangin 스킬을 읽고 구상 질문, 조사, 문서, 코딩, 검사
        도구 호출마다 → 플러그인 훅 (+ 선택: 셸 훅 `op guard --format hermes`, fail_closed)
        터미널 백엔드: local (기본) 또는 docker (격리 등급)
 ```
 
-| 지금 operator | Hermes 에서 |
+| 지금 jangin | Hermes 에서 |
 |---|---|
 | `op stage advance/back/set` (터미널) | `/advance`, `/back <단계> <이유>` |
 | `op pending approve/reject` (터미널) | `/ok 0003`, `/reject 0003 <이유>` |
@@ -86,7 +86,7 @@ Claude Code, Codex, Cursor, Gemini CLI 지원은 그대로 둔다. Hermes 는 �
 
 ### 지금 방식의 약점 (2026-10-30 확인)
 
-operator 0.5.0 은 사람 확인을 두 가지로 한다: 대화형 터미널(TTY) 검사와 `OPERATOR_ALLOW_NONINTERACTIVE_APPROVE=1`.
+jangin 0.5.0 은 사람 확인을 두 가지로 한다: 대화형 터미널(TTY) 검사와 `OPERATOR_ALLOW_NONINTERACTIVE_APPROVE=1`.
 둘 다 우회할 수 있다.
 
 - macOS 의 `script -q /dev/null <명령>` 은 가짜 터미널을 만들어 TTY 검사를 통과한다 (이 맥에서 확인).
@@ -135,7 +135,7 @@ operator 0.5.0 은 사람 확인을 두 가지로 한다: 대화형 터미널(TT
 일반 사용자 기본값은 등급 1, 실제 배포 계정을 연결하면 등급 2 를 권한다. 배포 명령은 등급 1 에서도 플러그인이 실행하도록
 배포 토큰을 `op secret` 으로만 받고, CLI 를 미리 로그인해 두지 말라고 안내한다.
 
-## 5. operator 쪽에서 바꿀 것
+## 5. jangin 쪽에서 바꿀 것
 
 | # | 변경 | 내용 |
 |---|---|---|
@@ -143,11 +143,11 @@ operator 0.5.0 은 사람 확인을 두 가지로 한다: 대화형 터미널(TT
 | 1 ✓ | 사람 권한 추상화 | `Authority(terminal | local | messenger)`, `guard.json` 의 `human_via`. 환경 변수 우회 제거, 테스트는 진짜 pty 로 사람 역할 |
 | 2 ✓ | `op guard --format hermes` | Hermes 페이로드(`terminal`·`write_file`·`patch`(V4A 포함)·`read_file`·`execute_code`) 해석, exit 2 + `{"action":"block","message"}`. `cwd` 가 게이트웨이 폴더라 `workdir` 이 없으면 등록된 프로젝트(`~/.config/operator/projects.json`) 규칙을 적용 |
 | 3 ✓ | op 를 모듈로 | `init_project`, `status_summary`, `queue_items`, `pending_decide`, `stage_move`, `stage_overview`, `secret_store`. `die` 는 `OpError` 를 던지고 CLI `main` 이 처리 |
-| 4 ✓ | Hermes 플러그인 패키지 | `hermes/operator/`: 슬래시 명령, 플러그인 `pre_tool_call` 훅, 스킬 번들(`ctx.register_skill`), 시스템 프롬프트 안내, `SOUL.md`, `config.example.yaml`, `install.sh`. 카드·cron 은 아직 |
-| 5 | 설치 마법사 | 완료: 터미널 `operator setup` (hermes/operator/setup_wizard.py). Hermes 함수로 config.yaml·.env·훅 허락 목록을 바꾼다. 남은 것: 하루 상한 |
+| 4 ✓ | Hermes 플러그인 패키지 | `hermes/jangin/`: 슬래시 명령, 플러그인 `pre_tool_call` 훅, 스킬 번들(`ctx.register_skill`), 시스템 프롬프트 안내, `SOUL.md`, `config.example.yaml`, `install.sh`. 카드·cron 은 아직 |
+| 5 | 설치 마법사 | 완료: 터미널 `jangin setup` (hermes/jangin/setup_wizard.py). Hermes 함수로 config.yaml·.env·훅 허락 목록을 바꾼다. 남은 것: 하루 상한 |
 | 6 | 배포 티켓 | `type: deploy` — 배포·상태 확인·되돌리기 명령을 한 티켓에 담아 한 번에 승인. 상태 확인 실패 시 되돌리기 티켓 자동 생성 |
 | 7 | 예산 장치 | 하루 pass 수, 큐 상한(차면 예약 실행 중단), 실행 시간 상한 |
-| 9 | 만들기 반복 = Hermes `/goal` | 마일스톤 → 완료 계약, 검사 명령 → 품질 관문 `op milestone done <n>`. operator 는 테스트 약화 감지와 비용 상한만 더한다 (6.1절) |
+| 9 | 만들기 반복 = Hermes `/goal` | 마일스톤 → 완료 계약, 검사 명령 → 품질 관문 `op milestone done <n>`. jangin 은 테스트 약화 감지와 비용 상한만 더한다 (6.1절) |
 | 8 | 감독 에이전트 | 플러그인이 다른 모델로 기준표 검토를 돌려 결과를 티켓에 기록 (에이전트가 스스로 적지 못함) |
 
 ## 6. 단계별 구현 순서
@@ -160,9 +160,9 @@ operator 0.5.0 은 사람 확인을 두 가지로 한다: 대화형 터미널(TT
 6. **M5 배포 관리** — 6. 비전 3순위.
 7. **M6 품질** — 8, 격리 등급 2 안내와 설정 도우미.
 
-### 6.1 만들기 단계: 반복은 Hermes `/goal` 이, 기준은 operator 가
+### 6.1 만들기 단계: 반복은 Hermes `/goal` 이, 기준은 jangin 이
 
-Hermes `/goal` 은 이미 "끝날 때까지 계속" 반복(랄프 루프)을 갖고 있다. operator 는 반복을 따로 만들지 않고 연결만 한다.
+Hermes `/goal` 은 이미 "끝날 때까지 계속" 반복(랄프 루프)을 갖고 있다. jangin 은 반복을 따로 만들지 않고 연결만 한다.
 (근거: `website/docs/user-guide/features/goals.md`, `hermes_cli/goals.py`, Hermes 0.22.5 소스. 실행 시험은 아직)
 
 | Hermes `/goal` 이 이미 하는 것 | 내용 |
@@ -176,14 +176,14 @@ Hermes `/goal` 은 이미 "끝날 때까지 계속" 반복(랄프 루프)을 갖
 연결 방식 (M4):
 
 1. 에이전트가 만들기 단계에서 `op milestone add "예약 폼" --test "npm test -- form"` 으로 마일스톤을 등록한다 (지금과 같음).
-2. 사용자가 `/build 1` (operator 플러그인 명령). 플러그인이 마일스톤 1 을 완료 계약으로 바꾼다:
-   outcome = 마일스톤 제목, verification = 검사 명령, constraints = `.operator/stages/build.md` 의 범위와 operator 규칙,
+2. 사용자가 `/build 1` (jangin 플러그인 명령). 플러그인이 마일스톤 1 을 완료 계약으로 바꾼다:
+   outcome = 마일스톤 제목, verification = 검사 명령, constraints = `.operator/stages/build.md` 의 범위와 jangin 규칙,
    boundaries = 배포·게시·발송·결제 금지(승인 대기로), stop_when = 관문 통과 또는 비용 상한.
 3. 관문은 검사 명령 그대로가 아니라 **`op milestone done 1`** 이다. 이 명령이 검사 명령을 돌리고, 아래 (a) 검사까지 통과해야
-   exit 0 이다. 그래서 반복이 끝나면 `milestones.json` 에 통과 기록이 남고, 관문과 operator 의 완료 기준이 하나가 된다.
+   exit 0 이다. 그래서 반복이 끝나면 `milestones.json` 에 통과 기록이 남고, 관문과 jangin 의 완료 기준이 하나가 된다.
 4. 반복이 끝나도 단계는 그대로다. 다음 단계로는 사람이 `/advance` 한다 (`stage_move` 는 사람 경로만 받는다).
 
-Hermes 에 없어서 operator 가 채우는 것:
+Hermes 에 없어서 jangin 이 채우는 것:
 
 | | 무엇 | 어떻게 |
 |---|---|---|
@@ -194,7 +194,7 @@ Hermes 에 없어서 operator 가 채우는 것:
 체크포인트(반복마다 되돌리기): Hermes 에 있다. `checkpoints.enabled: true` (기본 꺼짐)면 `write_file`·`patch` 와 파괴적인 터미널
 명령(`rm`, `mv`, `sed -i`, `>`, `git reset` 등) 전에 턴마다·폴더마다 한 번 그림자 git 저장소에 스냅숏을 남기고, 사람이
 `/rollback <N>` 으로 되돌린다. 자동으로 되돌리지는 않고, docker 같은 컨테이너 백엔드에서는 되돌리기를 거부한다.
-operator 는 자체 체크포인트를 만들지 않고, 프로필 설정에서 `checkpoints.enabled: true` 를 권한다.
+jangin 은 자체 체크포인트를 만들지 않고, 프로필 설정에서 `checkpoints.enabled: true` 를 권한다.
 
 확인할 것 (시험 단계): 플러그인이 `/goal` 을 코드로 시작할 공개 API 가 있는지(없으면 `/build` 가 사용자에게 `/goal …` 과
 `/goal gate add …` 두 줄을 보여 주고 사용자가 친다. `hermes_cli.goals.GoalManager` 를 직접 쓰는 건 내부 API 라 피한다),
@@ -215,7 +215,7 @@ operator 는 자체 체크포인트를 만들지 않고, 프로필 설정에서 
 | 셸 훅 차단 형식 | exit 2 + stdout `{"action":"block","message":…}` (또는 `{"decision":"block","reason":…}`). `fail_closed: true` 면 실행 실패·시간 초과·이상한 출력도 차단 | 소스, 실행 (`hermes hooks test`: 막기 exit 2, 허용 exit 0, op.py 없음 → 차단) |
 | 셸 훅 첫 사용 동의 | TTY 에서 y/N, `<HERMES_HOME>/shell-hooks-allowlist.json` 에 기록. `--accept-hooks`, `HERMES_ACCEPT_HOOKS=1`, `hooks_auto_accept: true` 로 건너뜀 | 소스 |
 | 플러그인 훅 | `ctx.register_hook("pre_tool_call", fn)`, `fn(tool_name, args, …)` 가 `{"action":"block","message"}` 를 돌려주면 차단. `ctx.session_cwd()` 로 세션 폴더를 안다 → 기본 가드는 플러그인 훅 | 소스, 실행 |
-| 설치 | `hermes plugins install owner/repo[/하위폴더]` (하위 폴더는 sparse checkout), 매니페스트는 `plugin.yaml` (`name` 만 필수), 진입점 `__init__.py:register(ctx)`, 활성화 `plugins.enabled` 또는 `hermes plugins enable`. 스킬은 `ctx.register_skill(name, SKILL.md 경로)` 로 `operator:operator` | 소스, 실행 (`install.sh --home` + `plugins enable` + `plugins doctor` OK) |
+| 설치 | `hermes plugins install owner/repo[/하위폴더]` (하위 폴더는 sparse checkout), 매니페스트는 `plugin.yaml` (`name` 만 필수), 진입점 `__init__.py:register(ctx)`, 활성화 `plugins.enabled` 또는 `hermes plugins enable`. 스킬은 `ctx.register_skill(name, SKILL.md 경로)` 로 `jangin:jangin` | 소스, 실행 (`install.sh --home` + `plugins enable` + `plugins doctor` OK) |
 | 프로필·성격 | `hermes profile create <이름>` → `~/.hermes/profiles/<이름>/SOUL.md`. 프로필 배포판(`distribution.yaml` + SOUL.md + skills/ + plugins/, `hermes profile install <repo>`) 이 있다. 플러그인이 SOUL.md 를 직접 바꾸는 API 는 없다 → 설치 스크립트가 넣고 `register_system_prompt_section` 으로 짧은 안내 | 소스(문서) |
 | 에이전트가 쓸 수 있는 Hermes 파일 | `write_file` 은 `~/.hermes` 의 `config.yaml` 만 막는다. `plugin-data/`, `shell-hooks-allowlist.json` 은 쓸 수 있다 → 승인 상태는 plugin-data 가 아니라 프로젝트 `.operator/`(가드 보호)에 둔다. 프로젝트 목록은 `~/.config/operator/` (가드 보호) | 소스 |
 | 실제 흐름 | `/setup folder` → `/idea` → `/stage` → `/advance`(by `local:hermes:desktop`) → `op pending add` → `/inbox` → `/ok`(메신저 source, `decided_by: messenger:hermes:telegram:42`). 같은 프로젝트에서 `script -q /dev/null op stage set` 은 exit 7 | 실행 (`hermes/check_live.py`) |
@@ -224,7 +224,7 @@ operator 는 자체 체크포인트를 만들지 않고, 프로필 설정에서 
 
 | 항목 | 이유·방법 |
 |---|---|
-| 실제 모델과의 대화 (에이전트가 스킬을 따르는지, `/ok` 를 흉내 내려 하는지) | 모델 토큰이 들고 사용자 프로필이 필요하다. 프로필 `operator` 에서 직접 대화로 |
+| 실제 모델과의 대화 (에이전트가 스킬을 따르는지, `/ok` 를 흉내 내려 하는지) | 모델 토큰이 들고 사용자 프로필이 필요하다. 프로필 `jangin` 에서 직접 대화로 |
 | 메신저 게이트웨이 (텔레그램에서 친 `/ok` 의 `source.user_id`) | 봇 토큰과 실제 계정이 필요하다. 소스상 경로만 확인 |
 | Desktop 앱에서 명령·훅 동작과 셸 훅 동의 창 모양 | Desktop 화면 조작이 필요하다 |
 | 로컬 소켓 `slash.exec` 를 에이전트가 실제로 부를 수 있는지 | 원리상 가능(소스). 실제 공격 시험은 하지 않았다 |
@@ -232,12 +232,12 @@ operator 는 자체 체크포인트를 만들지 않고, 프로필 설정에서 
 | 메신저 카드에 승인 버튼 붙이기 | `ctx.post_message` 는 글만 확인. 버튼은 Hermes 의 승인 전송(`register_approval_transport`)을 써야 할 수 있다 |
 | docker 백엔드에서 `.operator/` 일부만 `:ro` | 격리 등급 2, M6 |
 | `/goal` 연결 (6.1절): 플러그인이 goal 을 코드로 시작할 수 있는지, 칸반 `--goal`, 비용 값 갱신 시점, 관문 폴더 | 소스와 문서만 읽었다. M4 시험에서 |
-| `hermes plugins install pullyo/operator-skill/hermes/operator` | 하위 폴더만 받아 스킬(op.py)이 없다. 지금은 `install.sh` 로 설치 |
+| `hermes plugins install pullyo/jangin/hermes/jangin` | 하위 폴더만 받아 스킬(op.py)이 없다. 지금은 `install.sh` 로 설치 |
 
 ## 8. 하지 않는 것 (이 설계 범위 밖)
 
 - Hermes 자체를 고치거나 포크하지 않는다. 문서화된 확장 지점(스킬, 셸 훅, 플러그인, cron)만 쓴다.
 - 다음 후보: 이 저장소를 **프로필 배포판**으로도 만들기(루트에 `distribution.yaml`, 또는 별도 저장소). 그러면
-  `hermes profile install pullyo/operator-skill` 한 줄로 성격·스킬·플러그인이 같이 들어온다. 아직 시험하지 않았다.
+  `hermes profile install pullyo/jangin` 한 줄로 성격·스킬·플러그인이 같이 들어온다. 아직 시험하지 않았다.
 - oh-my-hermes 의존은 넣지 않는다. 설치돼 있으면 만들기 단계의 큰 마일스톤을 맡기는 선택 연동만 나중에 검토한다.
 - 자체 앱, 자체 텔레그램 봇 확장은 더 하지 않는다. 기존 `op telegram` 은 Hermes 를 쓰지 않는 사람을 위해 유지한다.

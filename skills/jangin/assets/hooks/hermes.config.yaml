@@ -1,13 +1,13 @@
 # Hermes Agent: ~/.hermes/config.yaml (또는 프로필의 config.yaml) 의 hooks 에 합친다.
-# OPERATOR_HOME 을 스킬 폴더 절대경로로 바꾼다 (예: /Users/me/.hermes/skills/operator).
+# OPERATOR_HOME 을 스킬 폴더 절대경로로 바꾼다 (예: /Users/me/.hermes/skills/jangin).
 # Hermes 는 command 를 셸 없이 실행하므로 셸 문법(||, $VAR)은 쓰지 않는다.
 #
 # fail_closed: true — op.py 가 없거나, 시간이 넘거나, 이상한 출력을 내면 도구 호출을 막는다.
 # 처음 쓸 때 Hermes 가 이 훅을 믿을지 묻는다 (y). 답은 <HERMES_HOME>/shell-hooks-allowlist.json 에 남는다.
 #
 # 한계: 셸 훅이 받는 cwd 는 세션 폴더가 아니라 게이트웨이 프로세스의 폴더다. 그래서 터미널 도구가 workdir 을 주지 않은
-# 호출은 등록된 operator 프로젝트(~/.config/operator/projects.json) 전부의 규칙으로 판단한다.
-# Hermes 플러그인(hermes/operator)을 함께 설치하면 플러그인 훅이 세션 폴더를 정확히 알고 같은 규칙을 먼저 적용한다.
+# 호출은 등록된 jangin 프로젝트(~/.config/operator/projects.json) 전부의 규칙으로 판단한다.
+# Hermes 플러그인(hermes/jangin)을 함께 설치하면 플러그인 훅이 세션 폴더를 정확히 알고 같은 규칙을 먼저 적용한다.
 hooks:
   pre_tool_call:
     - matcher: "terminal|write_file|patch|read_file|execute_code"

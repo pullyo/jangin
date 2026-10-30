@@ -1,12 +1,12 @@
 ---
-name: operator
+name: jangin
 description: >-
   1인 개발자의 아이디어를 함께 다듬고, 만들고, 출시해서 매일 "굴려주는" AI 직원 운영 루프.
   발견 → 검증 → 만들기 → 운영 → 배우기 단계를 기록하고, 밖으로 나가는 행동(발송·게시·배포·결제·삭제)은
   훅과 승인 큐로 막아 사람이 승인한 것만 실행한다. 사용자가 사업 아이디어 의논, "이거 팔릴까",
   아이디어 검증, MVP 만들기, 출시, 사업/프로젝트 운영 자동화, 소셜 포스트·이메일·아웃리치 초안과 발송,
   시장·경쟁사 리서치 루틴, 사이트 배포, 반응·지표 회고, "AI 직원", "운영 루프", "pass", "승인 큐",
-  "Needs your OK", "재개", "operator" 를 언급하거나, 에이전트가 밖으로 나가는 행동을 해야 하는 상황이면
+  "Needs your OK", "재개", "jangin" 을 언급하거나, 에이전트가 밖으로 나가는 행동을 해야 하는 상황이면
   반드시 이 스킬을 써라. "매일 돌려줘", "밤새 돌려줘", "초안 만들어서 올려놔", "승인 대기 뭐 있어",
   "다음 단계로 가자" 같은 말도 해당한다. Claude Code, Codex CLI, Cursor, Gemini CLI 등 Agent Skills
   표준을 지원하는 모든 도구에서 동작.
@@ -19,7 +19,7 @@ metadata:
   version: "0.6.0"
 ---
 
-# operator — 아이디어부터 운영까지, 적게 하지만 절대 안 어기는 AI 직원
+# jangin — 아이디어부터 운영까지, 적게 하지만 절대 안 어기는 AI 직원
 
 "AI 직원" 서비스는 "만들어준다"에서 끝나지 않고 "같이 정하고, 만들고, 굴려준다"로 성립한다. 모델은 빌려 쓰므로
 차별점이 아니고, 진짜 차별점은 LLM 을 둘러싼 **실행 환경**이다. 이 스킬은 그 환경을 1인 개발자가 감당할 수 있는
@@ -37,8 +37,8 @@ metadata:
 ## 0. 준비 (매 세션 처음 한 번)
 
 `op` 는 이 SKILL.md 와 같은 폴더의 `scripts/op` 다. 아래에서 `op` 라고 쓰면 그 경로를 뜻한다.
-(실행 환경이 스킬 폴더를 알려주지 않으면 `.agents/skills/operator/scripts/op`,
-`~/.claude/skills/operator/scripts/op`, `~/.codex/skills/operator/scripts/op` 순으로 찾아라.)
+(실행 환경이 스킬 폴더를 알려주지 않으면 `.agents/skills/jangin/scripts/op`,
+`~/.claude/skills/jangin/scripts/op`, `~/.codex/skills/jangin/scripts/op` 순으로 찾아라.)
 
 ```bash
 op status            # .operator/ 가 없으면 "먼저 op init" 이라고 나온다
@@ -148,9 +148,9 @@ op pass done report  ;  op pass end                             # passes/<id>.md
 이 명령들은 사람의 결정 경로(대화형 터미널, 또는 Hermes 에서 사용자가 친 `/ok`·`/advance`)로만 동작한다.
 네 셸 도구에는 터미널이 없어서 실행되지 않는다. 버그가 아니라 설계다. 가짜 터미널(`script`)이나 스크립트 파일로
 감싸는 것은 막힌 것을 우회하는 행동이다. 기술적으로 될 때가 있어도 하지 마라.
-Hermes 에서는 사용자에게 터미널 명령 대신 operator 플러그인의 슬래시 명령을 안내한다: 승인 대기 `/inbox`,
+Hermes 에서는 사용자에게 터미널 명령 대신 jangin 플러그인의 슬래시 명령을 안내한다: 승인 대기 `/inbox`,
 승인 `/ok 0003`, 거절 `/reject 0003 <이유>`, 단계 `/stage`, 다음 단계 `/advance`, 되돌리기 `/back <단계> <이유>`.
-Hermes 내장 `/approve` 는 위험 명령 허락용이라 operator 승인 대기와 다르다.
+Hermes 내장 `/approve` 는 위험 명령 허락용이라 jangin 승인 대기와 다르다.
 
 사용자가 "승인해 줘"라고 하면 **네가 치지 말고** 사용자가 자기 터미널에서 실행할 명령을 보여 줘라:
 

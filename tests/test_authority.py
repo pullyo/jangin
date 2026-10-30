@@ -13,7 +13,7 @@ import unittest
 
 from _tty import run_tty
 
-OP = Path(__file__).resolve().parents[1] / 'skills' / 'operator' / 'scripts' / 'op.py'
+OP = Path(__file__).resolve().parents[1] / 'skills' / 'jangin' / 'scripts' / 'op.py'
 
 
 def load_op():

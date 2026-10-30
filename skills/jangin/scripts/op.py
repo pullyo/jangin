@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""op — operator 스킬의 단일 진입점 CLI.
+"""op — Jangin 스킬의 엔진 CLI (내부 이름은 예전 이름 operator 를 그대로 쓴다: .operator/, OPERATOR_*).
 
 "AI 직원" 서비스가 인프라로 강제하는 장치(단계, 승인, 재개, 검증, 라우팅)를
 셸 + JSON 파일 수준으로 옮긴 것이다. 어떤 에이전트(Claude Code, Codex,
@@ -2256,7 +2256,7 @@ def cmd_guard(args):
 
 
 def _guard_block(fmt, reason):
-    msg = "[operator 승인 게이트] " + reason
+    msg = "[jangin 승인 게이트] " + reason
     if fmt == "cursor":
         print(json.dumps({"permission": "deny", "user_message": msg, "agent_message": msg}, ensure_ascii=False))
         return

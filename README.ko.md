@@ -1,13 +1,15 @@
-# operator
+# Jangin (장인)
 
 [English](README.md) · **한국어**
+
+> 장인: 자기 일을 처음부터 끝까지 손수 다듬어 완성하는 사람. 이 프로젝트의 예전 이름은 operator 입니다.
 
 **아이디어 구상을 함께 하고, 그 아이디어로 개발과 배포 관리까지 돕는, 내 컴퓨터에서 도는 전용 AI 비서.**
 중심은 구상입니다. 코딩 에이전트가 한 번에 하나씩 묻고, 반론을 던지고, 조사해서 만들 가치가 있는지 같이 정합니다.
 그다음 승인된 계획을 마일스톤마다 만들고 승인 큐를 거쳐 배포하며, 출시를 알리고 숫자를 보고 다음 할 일을 제안합니다.
 다음 단계로 넘어가는 것과 내 컴퓨터 밖으로 나가는 행동은 전부 내 손을 거칩니다. 목표와 로드맵: [VISION.md](VISION.md).
 
-operator 는 [Agent Skill](https://agentskills.io) 과 의존성 없는 작은 파이썬 CLI(`op`)로 이뤄져 있습니다.
+jangin 은 [Agent Skill](https://agentskills.io) 과 의존성 없는 작은 파이썬 CLI(`op`)로 이뤄져 있습니다.
 같은 폴더를 Claude Code, Codex CLI, Cursor, Gemini CLI 등 Agent Skills 형식을 읽는 도구에서 그대로 씁니다.
 
 ---
@@ -17,9 +19,9 @@ operator 는 [Agent Skill](https://agentskills.io) 과 의존성 없는 작은 �
 "AI 직원" 서비스가 매력적인 이유는 무언가를 *만들어* 주는 데서 끝나지 않기 때문입니다. 무엇을 만들지 같이 정하고,
 만든 뒤에도 계속 *굴려* 줍니다. 그런데 그 서비스를 안전하게 만드는 건 모델이 아니라 모델을 둘러싼 장치입니다.
 단계, 승인, 체크포인트, 검증 같은 것들입니다. 대부분의 에이전트 플러그인은 모델에게 "먼저 확인받아"라고 *부탁*만 하고,
-제품이 이미 있다고 가정합니다. operator 는 에이전트에게 따라갈 단계를 주고, 부탁을 우회할 수 없는 규칙으로 바꿉니다.
+제품이 이미 있다고 가정합니다. jangin 은 에이전트에게 따라갈 단계를 주고, 부탁을 우회할 수 없는 규칙으로 바꿉니다.
 
-| operator 없이 | operator 와 함께 |
+| jangin 없이 | jangin 과 함께 |
 |---|---|
 | 세션마다 완성된 제품을 가정하고 게시물부터 씀 | 프로젝트의 **단계**(발견 → 검증 → 만들기 → 운영 → 배우기)가 기록되고, 에이전트는 그 단계의 일만 함. 다음 단계로는 나만 넘김 |
 | 프롬프트에 "게시 전에 물어봐"라고 적음 (대체로 지켜짐) | 게시·메일·배포·결제·삭제를 **훅이 막고** 승인 큐로 보냄 |
@@ -73,15 +75,15 @@ operator 는 [Agent Skill](https://agentskills.io) 과 의존성 없는 작은 �
 
 ```text
 # Claude Code — 플러그인, 훅이 자동 연결됨
-/plugin marketplace add pullyo/operator-skill
-/plugin install operator@operator-skill
+/plugin marketplace add pullyo/jangin
+/plugin install jangin@jangin
 ```
 
 ```bash
 # 어떤 도구든 수동 설치: ~/.claude, ~/.codex, ~/.cursor, ~/.gemini 중 있는 곳에 링크
-git clone https://github.com/pullyo/operator-skill
-sh operator-skill/skills/operator/install.sh
-sh operator-skill/skills/operator/install.sh --print-hooks   # Claude Code / Codex / Cursor / Gemini CLI / Hermes 용 훅 설정
+git clone https://github.com/pullyo/jangin
+sh jangin/skills/jangin/install.sh
+sh jangin/skills/jangin/install.sh --print-hooks   # Claude Code / Codex / Cursor / Gemini CLI / Hermes 용 훅 설정
 ```
 
 훅 없이도 스킬은 동작하지만, 그때 차단은 보장이 아니라 지시 수준이 됩니다.
@@ -89,14 +91,14 @@ sh operator-skill/skills/operator/install.sh --print-hooks   # Claude Code / Cod
 **2. 프로젝트 하나에서 켜기**
 
 ```bash
-alias op="$PWD/operator-skill/skills/operator/scripts/op"   # 또는 scripts/op 를 PATH 에 추가
+alias op="$PWD/jangin/skills/jangin/scripts/op"   # 또는 scripts/op 를 PATH 에 추가
 mkdir ~/bakery-booking && cd ~/bakery-booking && op init    # 새 아이디어는 발견 단계에서 시작
 # 이미 운영 중인 제품이면:  op init --stage operate
 ```
 
 **3. 에이전트에게 말하기** (그 폴더에서 새 세션을 열고)
 
-> 동네 빵집용 예약 페이지를 만들어 보고 싶어. operator 로 같이 정리해 줘.
+> 동네 빵집용 예약 페이지를 만들어 보고 싶어. jangin 으로 같이 정리해 줘.
 
 에이전트가 한 번에 하나씩 묻고, 답을 `.operator/stages/discover.md` 에 정리합니다(문제, 고객, 제안, 성공 지표).
 `op stage check` 를 통과하면 다음 단계로 넘겨 달라고 요청합니다.
@@ -121,23 +123,23 @@ op telegram                          # 선택: 휴대폰으로 승인
 ## Hermes 에서 쓰기 (전용 사업 비서)
 
 [Hermes Agent](https://github.com/NousResearch/hermes-agent) 를 엔진으로 쓰면 터미널 없이 앱과 메신저로 씁니다.
-Hermes 코드와 쓰던 Hermes(기본 프로필)는 그대로 두고, 그 옆에 **Operator 전용 프로필**을 만듭니다. Hermes 0.22.5 에서 확인했습니다.
+Hermes 코드와 쓰던 Hermes(기본 프로필)는 그대로 두고, 그 옆에 **Jangin 전용 프로필**을 만듭니다. Hermes 0.22.5 에서 확인했습니다.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/pullyo/operator-skill/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/pullyo/jangin/main/install.sh | sh
 ```
 
-한 줄이 순서대로 합니다: Hermes 가 없으면 설치(먼저 묻습니다) → operator 를 `~/.operator/operator-skill` 에 받기 →
-쓰던 Hermes 를 복사해 `operator` 프로필 만들기(모델·API 키·스킬·플러그인·기억. OAuth 로그인은 Hermes 가 복사하지 않고
-기본 프로필 것을 이어받게 합니다) → `operator setup`. 이후에는 `operator` 명령 하나로 씁니다: `operator chat`,
-`operator setup`, `operator update`(Hermes 와 operator 를 함께 최신으로). Hermes 앱에서는 프로필 목록에서 Operator 를 고릅니다.
+한 줄이 순서대로 합니다: Hermes 가 없으면 설치(먼저 묻습니다) → jangin 을 `~/.jangin/jangin` 에 받기 →
+쓰던 Hermes 를 복사해 `jangin` 프로필 만들기(모델·API 키·스킬·플러그인·기억. OAuth 로그인은 Hermes 가 복사하지 않고
+기본 프로필 것을 이어받게 합니다) → `jangin setup`. 이후에는 `jangin` 명령 하나로 씁니다: `jangin chat`,
+`jangin setup`, `jangin update`(Hermes 와 jangin 을 함께 최신으로). Hermes 앱에서는 프로필 목록에서 Jangin 을 고릅니다.
 그냥 `hermes` 는 원래 Hermes 그대로입니다.
 
-`operator setup` 은 먼저 원래 Hermes 설정 마법사(모델·로그인, 터미널, 메신저, 도구)를 그대로 진행하고, 끝나면 operator
-단계를 Hermes 마법사와 같은 화면(◆ 제목, 번호 선택, 엔터 = 지금 값 유지, Esc 취소)으로 이어서 묻습니다: operator 플러그인 켜기, 프로젝트 폴더, 승인 방식(데스크톱+메신저 또는 메신저만), 메신저 승인 허용
+`jangin setup` 은 먼저 원래 Hermes 설정 마법사(모델·로그인, 터미널, 메신저, 도구)를 그대로 진행하고, 끝나면 jangin
+단계를 Hermes 마법사와 같은 화면(◆ 제목, 번호 선택, 엔터 = 지금 값 유지, Esc 취소)으로 이어서 묻습니다: jangin 플러그인 켜기, 프로젝트 폴더, 승인 방식(데스크톱+메신저 또는 메신저만), 메신저 승인 허용
 사용자, 도구(컴퓨터 화면 조작, 브라우저 자동 조작, X 검색, 칸반 켜고 끄기), 플러그인이 꺼져도 막는 두 번째 잠금(셸 훅).
-브라우저와 컴퓨터 화면 조작은 operator 가드를 거치지 않으므로, 실제 계정을 연결했다면 컴퓨터 화면 조작은 끄는 것을 권합니다. operator 단계만은 `operator setup --operator-only`, Hermes 마법사만은
-`operator setup --hermes`, Hermes 의 한 단계만은 `operator setup model` 처럼 씁니다.
+브라우저와 컴퓨터 화면 조작은 jangin 가드를 거치지 않으므로, 실제 계정을 연결했다면 컴퓨터 화면 조작은 끄는 것을 권합니다. jangin 단계만은 `jangin setup --jangin-only`, Hermes 마법사만은
+`jangin setup --hermes`, Hermes 의 한 단계만은 `jangin setup model` 처럼 씁니다.
 
 대화창(Desktop, 또는 연결한 텔레그램 등)에서:
 
@@ -149,7 +151,7 @@ curl -fsSL https://raw.githubusercontent.com/pullyo/operator-skill/main/install.
 | `/inbox` · `/ok 0003` · `/reject 0003 너무 딱딱함` | 승인 대기 확인과 결정 (나만). 승인하면 플러그인이 바로 보냅니다 |
 | `/setup` | 프로젝트 폴더, 지금 프로젝트, `/setup unlock` (키체인 토큰 읽기) |
 
-Hermes 내장 `/approve` 는 위험 명령 허락용이라 operator 의 `/ok` 와 다릅니다. `/idea` 로 만든 프로젝트는 터미널 승인을 받지 않고
+Hermes 내장 `/approve` 는 위험 명령 허락용이라 jangin 의 `/ok` 와 다릅니다. `/idea` 로 만든 프로젝트는 터미널 승인을 받지 않고
 Hermes 에서 친 명령만 받습니다. 휴대폰 메신저에서 친 명령만 받으려면 `.operator/guard.json` 에 `"human_via": ["messenger"]`.
 설계와 확인한 것·아직인 것: [docs/hermes-design.md](docs/hermes-design.md).
 
@@ -212,21 +214,21 @@ Hermes 에서 친 명령만 받습니다. 휴대폰 메신저에서 친 명령�
 ## 한계
 
 - 혼자 돌지 않습니다. pass 는 내가(또는 운영체제 예약이) 시킬 때 시작합니다 —
-  [예약 실행](skills/operator/references/scheduling.md) 참고. human 방식의 발송은 컴퓨터가 켜져 있어야 합니다.
+  [예약 실행](skills/jangin/references/scheduling.md) 참고. human 방식의 발송은 컴퓨터가 켜져 있어야 합니다.
 - 브랜드 디자인, 도메인 구매, 결제 처리는 하지 않습니다.
 - X, Threads, SMTP, 텔레그램은 실제 계정이 아니라 각 API 를 흉내 낸 로컬 서버로 테스트했습니다. Threads 토큰은 갱신하지 않습니다.
 
 ## 저장소 구조
 
 ```
-operator-skill/
+jangin/
 ├── .claude-plugin/        Claude Code 플러그인 + 마켓플레이스 매니페스트
 ├── .codex-plugin/         Codex 플러그인 매니페스트
 ├── hooks/hooks.json       Claude Code 플러그인 훅 (승인 게이트)
-├── hermes/operator/       Hermes 플러그인 (슬래시 명령, 가드 훅, SOUL.md, install.sh)
+├── hermes/jangin/       Hermes 플러그인 (슬래시 명령, 가드 훅, SOUL.md, install.sh)
 ├── docs/                  설계 (hermes-design.md)
 ├── tests/                 실제 `op` 프로세스를 돌리는 종단 테스트
-└── skills/operator/       스킬 본체 (Agent Skills 형식)
+└── skills/jangin/       스킬 본체 (Agent Skills 형식)
     ├── SKILL.md           에이전트가 읽는 문서
     ├── scripts/op.py      CLI — Python 3.8+, 표준 라이브러리만
     ├── references/        단계, pass 흐름, 가드·검증 규칙, 채널과 비밀값, 예약 실행, 설계 메모
@@ -243,11 +245,17 @@ python3 -m unittest discover -s tests
 테스트는 Claude Code 와 Codex 가 보내는 것과 같은 훅 입력을 실제 `op` 프로세스에 넣고, 프로젝트를 모든 단계로 옮겨 보고,
 임시 홈 폴더에서 가짜 X·Threads·토큰·텔레그램 서버로 보내 실제 계정과 키체인을 건드리지 않고 확인합니다.
 
+## 내부 이름
+
+이름은 Jangin 으로 바뀌었지만, 이미 만든 프로젝트와 저장된 토큰이 그대로 동작하도록 엔진의 내부 이름은 예전 그대로입니다:
+`op` 명령, 프로젝트마다 생기는 `.operator/` 폴더, `OPERATOR_*` 환경 변수, 토큰 저장 위치(`~/.config/operator`, 키체인 서비스
+`operator`). 예전 `operator` 명령은 당분간 `jangin` 으로 넘겨 줍니다.
+
 ## 배경
 
 [Foundable](https://foundable.com) 이 공개적으로 설명하는 AI 직원의 운영 방식(만들기 → 운영 → 수익, 모든 것이
-사용자의 OK 를 기다림)에서 착안했습니다. operator 는 독립 구현이며 Foundable 과 관계가 없습니다.
-설계 메모: [references/foundable-research.md](skills/operator/references/foundable-research.md).
+사용자의 OK 를 기다림)에서 착안했습니다. jangin 은 독립 구현이며 Foundable 과 관계가 없습니다.
+설계 메모: [references/foundable-research.md](skills/jangin/references/foundable-research.md).
 
 ## 라이선스
 

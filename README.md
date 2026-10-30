@@ -1,6 +1,8 @@
-# operator
+# Jangin (장인)
 
 **English** · [한국어](README.ko.md)
+
+> *Jangin* (장인) is Korean for a master craftsman who shapes a piece of work from start to finish. Formerly named operator.
 
 **A dedicated AI partner that helps you shape an idea, then develop it and manage its deployment, on your own machine.**
 Shaping the idea comes first: your coding agent asks one question at a time, pushes back, researches and helps you decide
@@ -8,7 +10,7 @@ whether it is worth building. Then it builds the approved plan milestone by mile
 and keeps announcing it and reading the numbers to suggest what to do next. Every move to the next stage and every action
 that leaves your machine goes through you. Goal and roadmap: [VISION.md](VISION.md).
 
-operator is an [Agent Skill](https://agentskills.io) plus a small, dependency-free Python CLI (`op`). The same folder works in
+jangin is an [Agent Skill](https://agentskills.io) plus a small, dependency-free Python CLI (`op`). The same folder works in
 Claude Code, Codex CLI, Cursor, Gemini CLI and other tools that read the Agent Skills format.
 
 ---
@@ -18,9 +20,9 @@ Claude Code, Codex CLI, Cursor, Gemini CLI and other tools that read the Agent S
 "AI employee" products are compelling because they don't stop at *building* something: they help you decide what to build,
 then keep *running* it. What makes them safe is not the model but the machinery around it: stages, approvals,
 checkpoints, validation. Most agent plugins only *ask* the model to "get confirmation first" and assume the product
-already exists. operator gives the agent a lifecycle to follow and turns the requests into rules it cannot get around:
+already exists. jangin gives the agent a lifecycle to follow and turns the requests into rules it cannot get around:
 
-| Without operator | With operator |
+| Without jangin | With jangin |
 |---|---|
 | Every session assumes a finished product and starts writing posts | The project has a recorded **stage** (discover → validate → build → operate → learn); the agent does the work of that stage, and only you move it on |
 | "Ask before posting" in a prompt (usually followed) | Posting, emailing, deploying, paying and deleting are **blocked by a hook** and routed to an approval queue |
@@ -74,15 +76,15 @@ so the agent's own shell tool can never approve or advance anything.
 
 ```text
 # Claude Code — plugin, hook is wired automatically
-/plugin marketplace add pullyo/operator-skill
-/plugin install operator@operator-skill
+/plugin marketplace add pullyo/jangin
+/plugin install jangin@jangin
 ```
 
 ```bash
 # Any tool, by hand: links the skill into ~/.claude, ~/.codex, ~/.cursor, ~/.gemini (whichever exist)
-git clone https://github.com/pullyo/operator-skill
-sh operator-skill/skills/operator/install.sh
-sh operator-skill/skills/operator/install.sh --print-hooks   # hook snippets for Claude Code / Codex / Cursor / Gemini CLI / Hermes
+git clone https://github.com/pullyo/jangin
+sh jangin/skills/jangin/install.sh
+sh jangin/skills/jangin/install.sh --print-hooks   # hook snippets for Claude Code / Codex / Cursor / Gemini CLI / Hermes
 ```
 
 Without a hook the skill still works, but blocking becomes an instruction instead of a guarantee.
@@ -90,14 +92,14 @@ Without a hook the skill still works, but blocking becomes an instruction instea
 **2. Turn it on for one project**
 
 ```bash
-alias op="$PWD/operator-skill/skills/operator/scripts/op"   # or put scripts/op on your PATH
+alias op="$PWD/jangin/skills/jangin/scripts/op"   # or put scripts/op on your PATH
 mkdir ~/bakery-booking && cd ~/bakery-booking && op init    # a new idea starts at the discover stage
 # already running a product?  op init --stage operate
 ```
 
 **3. Talk to your agent** (open a new session in that folder)
 
-> I want to build a booking page for small bakeries. Let's figure it out with operator.
+> I want to build a booking page for small bakeries. Let's figure it out with jangin.
 
 The agent asks one question at a time and writes the answers into `.operator/stages/discover.md`
 (problem, customer, offer, success metric). When `op stage check` passes it asks you to move on.
@@ -121,29 +123,29 @@ op telegram                          # optional: approve from your phone
 
 ## Using it in Hermes (a dedicated business assistant)
 
-With [Hermes Agent](https://github.com/NousResearch/hermes-agent) as the engine you use operator from an app and from
-messengers, without a terminal. Hermes and your existing default profile stay as they are: operator lives in its own **Operator profile** next to them.
+With [Hermes Agent](https://github.com/NousResearch/hermes-agent) as the engine you use jangin from an app and from
+messengers, without a terminal. Hermes and your existing default profile stay as they are: jangin lives in its own **Jangin profile** next to them.
 Checked against Hermes 0.22.5.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/pullyo/operator-skill/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/pullyo/jangin/main/install.sh | sh
 ```
 
-The one line installs Hermes if it is missing (asking first), downloads operator to `~/.operator/operator-skill`, creates the
-`operator` profile as a copy of your default profile (model, API keys, skills, plugins, memory; Hermes does not copy OAuth
-grants, the profile inherits the default profile's login), and opens `operator setup`. Afterwards one command does everything:
-`operator chat`, `operator setup`, `operator update` (updates Hermes and operator together). In the Hermes app, pick the Operator
+The one line installs Hermes if it is missing (asking first), downloads jangin to `~/.jangin/jangin`, creates the
+`jangin` profile as a copy of your default profile (model, API keys, skills, plugins, memory; Hermes does not copy OAuth
+grants, the profile inherits the default profile's login), and opens `jangin setup`. Afterwards one command does everything:
+`jangin chat`, `jangin setup`, `jangin update` (updates Hermes and jangin together). In the Hermes app, pick the Jangin
 profile; plain `hermes` stays stock Hermes.
 
-`operator setup` first runs the original Hermes setup wizard as-is (model and login, terminal, messaging, tools), then adds the
-operator steps in the same Hermes wizard style (◆ headers, numbered choices, Enter keeps the current value, Esc cancels): enabling the plugin, the project folder, the approval mode (desktop + messenger, or messenger only), the allowed
+`jangin setup` first runs the original Hermes setup wizard as-is (model and login, terminal, messaging, tools), then adds the
+jangin steps in the same Hermes wizard style (◆ headers, numbered choices, Enter keeps the current value, Esc cancels): enabling the plugin, the project folder, the approval mode (desktop + messenger, or messenger only), the allowed
 user for messenger approvals, tools (computer use, browser automation, X search, kanban; browser and computer use are not
-checked by the operator guard, so turn computer use off once real accounts are connected), and a second lock (a shell hook that blocks even if the plugin is off). `operator setup --operator-only`
-skips the Hermes part, `operator setup --hermes` runs only the Hermes wizard, and `operator setup model` runs one Hermes section.
+checked by the jangin guard, so turn computer use off once real accounts are connected), and a second lock (a shell hook that blocks even if the plugin is off). `jangin setup --jangin-only`
+skips the Hermes part, `jangin setup --hermes` runs only the Hermes wizard, and `jangin setup model` runs one Hermes section.
 
 In the chat (Desktop, or a connected Telegram etc.): `/idea <one line>`, `/project`, `/stage`, `/advance`, `/back <stage> <reason>`,
 `/inbox`, `/ok <id>`, `/reject <id> <reason>`, `/setup`. Hermes' built-in `/approve` is for dangerous-command prompts and is not
-operator's `/ok`. Projects made with `/idea` refuse terminal approvals; to accept only commands typed in a messenger, set
+jangin's `/ok`. Projects made with `/idea` refuse terminal approvals; to accept only commands typed in a messenger, set
 `"human_via": ["messenger"]` in `.operator/guard.json`. Design, and what is and is not verified: [docs/hermes-design.md](docs/hermes-design.md).
 
 ## Commands
@@ -205,22 +207,22 @@ operator's `/ok`. Projects made with `/idea` refuse terminal approvals; to accep
 
 ## Limits
 
-- operator does not run by itself. Each pass starts when you (or your OS scheduler) ask for it —
-  see [scheduling](skills/operator/references/scheduling.md). Sending in human mode needs your computer on.
+- jangin does not run by itself. Each pass starts when you (or your OS scheduler) ask for it —
+  see [scheduling](skills/jangin/references/scheduling.md). Sending in human mode needs your computer on.
 - It does not design your brand, buy domains or take payments.
 - X, Threads, SMTP and Telegram are tested against local fakes of their APIs, not live accounts. Threads tokens are not refreshed.
 
 ## Repository layout
 
 ```
-operator-skill/
+jangin/
 ├── .claude-plugin/        Claude Code plugin + marketplace manifest
 ├── .codex-plugin/         Codex plugin manifest
 ├── hooks/hooks.json       Claude Code plugin hook (approval gate)
-├── hermes/operator/       Hermes plugin (slash commands, guard hook, SOUL.md, install.sh)
+├── hermes/jangin/       Hermes plugin (slash commands, guard hook, SOUL.md, install.sh)
 ├── docs/                  Design notes (hermes-design.md)
 ├── tests/                 End-to-end tests that drive the real `op` process
-└── skills/operator/       The skill (Agent Skills format)
+└── skills/jangin/       The skill (Agent Skills format)
     ├── SKILL.md           What the agent reads
     ├── scripts/op.py      The CLI — Python 3.8+, standard library only
     ├── references/        Stages, pass flow, guard / validation rules, channels and secrets, scheduling, design notes
@@ -238,11 +240,17 @@ The tests feed the same hook JSON that Claude Code and Codex send into the real 
 stage, and post to local fake X, Threads, token and Telegram endpoints with a temporary home folder, so no real account or
 keychain is touched.
 
+## Internal names
+
+The project was renamed to Jangin, but the engine keeps its internal names so existing projects and stored tokens keep working:
+the `op` command, the per-project `.operator/` folder, `OPERATOR_*` environment variables, and the token store
+(`~/.config/operator`, keychain service `operator`). The old `operator` command forwards to `jangin` for now.
+
 ## Background
 
 The design was inspired by how [Foundable](https://foundable.com) describes its AI employee publicly
-(build → run → earn, everything waiting for your OK). operator is an independent implementation and is not affiliated with
-Foundable. Design notes: [references/foundable-research.md](skills/operator/references/foundable-research.md).
+(build → run → earn, everything waiting for your OK). jangin is an independent implementation and is not affiliated with
+Foundable. Design notes: [references/foundable-research.md](skills/jangin/references/foundable-research.md).
 
 ## License
 

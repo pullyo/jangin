@@ -1,4 +1,4 @@
 interface:
-  display_name: Operator
+  display_name: Jangin
   short_description: 사업·프로젝트를 AI 직원처럼 굴리되, 밖으로 나가는 건 100% 승인 큐를 거치는 운영 루프
-  default_prompt: operator 스킬로 이 프로젝트의 운영 pass 를 한 번 돌려줘. 결과는 승인 큐에 올려.
+  default_prompt: jangin 스킬로 이 프로젝트의 운영 pass 를 한 번 돌려줘. 결과는 승인 큐에 올려.

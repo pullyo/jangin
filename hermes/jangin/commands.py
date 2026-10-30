@@ -1,4 +1,4 @@
-"""operator 슬래시 명령의 본체. Hermes 와 상관없는 순수 파이썬이라 Hermes 없이 시험할 수 있다.
+"""jangin 슬래시 명령의 본체. Hermes 와 상관없는 순수 파이썬이라 Hermes 없이 시험할 수 있다.
 
 __init__.py 가 Hermes 에 명령을 등록하고, 사용자가 친 명령을 받으면 여기의 run() 을 부른다.
 사람의 결정(/ok /reject /advance /back)은 여기서만 Authority 로 만들어진다:
@@ -15,7 +15,7 @@ import threading
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 NAMES = ("idea", "project", "stage", "advance", "back", "inbox", "ok", "reject", "setup")
-# /operator <하위 명령> 으로도 부를 수 있다. 다른 플러그인과 이름이 겹칠 때를 위한 길이다.
+# /jangin <하위 명령> 으로도 부를 수 있다. 다른 플러그인과 이름이 겹칠 때를 위한 길이다.
 ALIASES = {"status": "project", "queue": "inbox", "approve": "ok", "help": "help"}
 HELP = {
     "idea": "/idea <한 줄 아이디어> — 새 프로젝트를 만들고 발견 단계를 시작합니다",
@@ -33,7 +33,7 @@ HELP = {
 def _load_op():
     """op.py 를 찾는다: 설치 스크립트가 플러그인 안에 둔 스킬 사본(skill/), 아니면 저장소 안의 원본."""
     for p in (os.environ.get("OPERATOR_OP_PY"), os.path.join(HERE, "skill", "scripts", "op.py"),
-              os.path.join(HERE, "..", "..", "skills", "operator", "scripts", "op.py")):
+              os.path.join(HERE, "..", "..", "skills", "jangin", "scripts", "op.py")):
         if p and os.path.isfile(p):
             spec = importlib.util.spec_from_file_location("operator_op", p)
             mod = importlib.util.module_from_spec(spec)
@@ -62,7 +62,7 @@ class Plugin:
 
     def settings(self):
         s = op.load_json(self.settings_path, {})
-        s.setdefault("folder", os.path.join(os.path.expanduser("~"), "operator-projects"))
+        s.setdefault("folder", os.path.join(os.path.expanduser("~"), "jangin-projects"))
         s.setdefault("projects", {})
         return s
 
@@ -80,15 +80,15 @@ class Plugin:
     def run(self, name, raw_args, platform="", user_id="", from_messenger=False):
         """명령 하나를 처리하고 사용자에게 보여 줄 한국어 문자열을 돌려준다. 예외는 메시지로 바꾼다.
         from_messenger: Hermes 가 메신저 사용자(SessionSource)를 넘겼을 때만 True."""
-        if name == "operator":
+        if name == "jangin":
             sub, _, raw_args = (raw_args or "").strip().partition(" ")
             name = ALIASES.get(sub, sub)
             if name in ("", "help"):
-                return "operator 명령\n" + "\n".join(HELP[n] for n in NAMES)
+                return "jangin 명령\n" + "\n".join(HELP[n] for n in NAMES)
         if name not in NAMES:
-            return f"모르는 명령: /{name}  (/operator help)"
+            return f"모르는 명령: /{name}  (/jangin help)"
         if from_messenger and self.allowed_users and str(user_id) not in self.allowed_users:
-            return "이 계정은 operator 명령 권한이 없습니다."
+            return "이 계정은 jangin 명령 권한이 없습니다."
         kind = "messenger" if from_messenger and user_id else "local"
         auth = op.Authority(kind, ":".join(x for x in ("hermes", platform, str(user_id)) if x))
         try:
@@ -213,7 +213,7 @@ class Plugin:
             target = parts[1]
             root = s["projects"].get(target) or os.path.abspath(os.path.expanduser(target))
             if not os.path.isdir(os.path.join(root, op.OP_DIR_NAME)):
-                return f"{root} 에는 operator 프로젝트(.operator/)가 없습니다."
+                return f"{root} 에는 jangin 프로젝트(.operator/)가 없습니다."
             key = os.path.basename(root)
             s["projects"][key], s["current"] = root, key
             self.save(s)
@@ -231,7 +231,7 @@ class Plugin:
         lines = [f"새 프로젝트 폴더: {s['folder']}", f"지금 프로젝트: {s.get('current') or '없음'}",
                  "새 프로젝트의 승인 방식: " + ("메신저만" if via == ["messenger"] else "데스크톱 앱과 메신저")]
         lines += [f"  · {k}: {v}" for k, v in sorted(s["projects"].items())]
-        lines += ["", "처음 설정은 터미널에서 `operator setup` (한국어 마법사)",
+        lines += ["", "처음 설정은 터미널에서 `jangin setup` (한국어 마법사)",
                   "바꾸기: /setup folder <경로> · /setup use <프로젝트 이름|폴더>",
                   "발송 토큰: 터미널에서 `op secret set <이름>` 으로 등록한 뒤 이 맥에서 `/setup unlock` (키체인 허락 창이 뜹니다).",
                   "토큰 값은 대화창에 붙여 넣지 마세요."]
@@ -251,7 +251,7 @@ class Plugin:
         for p in paths:
             rp = os.path.realpath(p if os.path.isabs(p) else os.path.join(base, p))
             if rp == sdir or rp.startswith(sdir + os.sep):
-                return "[operator 승인 게이트] 비밀값과 operator 설정 폴더는 사람이 띄운 프로세스만 읽고 쓴다."
+                return "[jangin 승인 게이트] 비밀값과 jangin 설정 폴더는 사람이 띄운 프로세스만 읽고 쓴다."
         roots = op.operator_roots(base, cmd, paths)
         if not (isinstance(workdir, str) and os.path.isabs(workdir)) and not session_cwd:
             # 세션 폴더를 모르면 셸 훅처럼 등록된 프로젝트 전부의 규칙으로 판단한다 (모르면 막는 쪽)
@@ -259,7 +259,7 @@ class Plugin:
         for od in roots:
             deny, reason = op.guard_decide(cmd, paths, od, base)
             if deny:
-                return "[operator 승인 게이트] " + reason
+                return "[jangin 승인 게이트] " + reason
         return None
 
     # ------------------------------------------------------------ 토큰

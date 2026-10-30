@@ -1,4 +1,4 @@
-"""hermes/operator: the slash-command core, tested without Hermes.
+"""hermes/jangin: the slash-command core, tested without Hermes.
 
 The live check against a real Hermes install is hermes/check_live.py (manual; it needs Hermes' own Python).
 """
@@ -10,7 +10,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-OP = ROOT / 'skills' / 'operator' / 'scripts' / 'op.py'
+OP = ROOT / 'skills' / 'jangin' / 'scripts' / 'op.py'
 
 DISCOVER = (ROOT / 'tests' / 'test_authority.py').read_text(encoding='utf-8').split('DISCOVER = """', 1)[1].split('"""', 1)[0]
 
@@ -29,7 +29,7 @@ class PluginTests(unittest.TestCase):
         self.old_home = os.environ.get('HOME')
         os.environ['HOME'] = str(self.base / 'home')
         (self.base / 'home').mkdir()
-        self.commands = load('operator_commands_under_test', ROOT / 'hermes' / 'operator' / 'commands.py')
+        self.commands = load('operator_commands_under_test', ROOT / 'hermes' / 'jangin' / 'commands.py')
         self.op = self.commands.op
         self.plugin = self.commands.Plugin(str(self.base / 'plugin-data'))
         self.plugin.run('setup', f'folder "{self.base / "projects"}"')
@@ -94,10 +94,10 @@ class PluginTests(unittest.TestCase):
 
     def test_reject_reason_and_aliases(self):
         self.add('조사 내용 ' * 50 + '\nhttps://a.example https://b.example https://c.example', kind='research', channel=None)
-        self.assertIn('0001', self.plugin.run('operator', 'queue', platform='desktop'))
+        self.assertIn('0001', self.plugin.run('jangin', 'queue', platform='desktop'))
         self.assertIn('거절했습니다', self.phone('reject', '0001 출처가 블로그뿐이다'))
         self.assertIn('출처가 블로그뿐이다', (self.project / '.operator/feedback.md').read_text(encoding='utf-8'))
-        self.assertIn('/ok <번호>', self.plugin.run('operator', 'help'))
+        self.assertIn('/ok <번호>', self.plugin.run('jangin', 'help'))
 
     def test_messenger_only_project_and_allowlist(self):
         g = json.loads((self.project / '.operator/guard.json').read_text(encoding='utf-8'))

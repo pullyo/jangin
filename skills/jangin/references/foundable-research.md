@@ -57,10 +57,10 @@ Ted 의 한 pass: 리서치 → 초안 → **검증 게이트** → **승인 대
 | 나중에 | Modal | AI 생성 코드 격리 실행이 필요할 때 |
 | 대체 | Turbopuffer → pgvector, Pierre → GitHub, Judgment Labs → Langfuse | |
 
-## 5. 원래 플러그인 구상 (가칭 operator)
+## 5. 원래 플러그인 구상 (가칭 jangin)
 
 ```
-operator/
+jangin/
 ├ skills/ plan · build · run · approve · earn
 ├ agents/ researcher · writer · builder
 ├ hooks/hooks.json   ← 발송·배포·결제 명령 차단 → pending 으로 우회

@@ -1,4 +1,4 @@
-# operator
+# jangin
 
 "적게 하지만 절대 안 어기는" 운영 스킬. "AI 직원" 서비스가 인프라(Temporal·Modal·승인 큐)로
 강제하던 네 가지 — **승인 게이트 · 재개 가능한 pass · 검증 게이트 · 모델 라우팅** — 를 python3 스크립트와
@@ -6,7 +6,7 @@ JSON 파일 수준으로 옮겼다. [Agent Skills 표준](https://agentskills.io
 Claude Code, Codex CLI, Cursor, Gemini CLI 등 이 표준을 읽는 도구에서 **같은 폴더 그대로** 쓴다.
 
 ```
-operator/
+jangin/
 ├── SKILL.md                 ← 에이전트가 읽는 본문 (모드: plan / run / approve / status)
 ├── scripts/op, op.py        ← 단일 CLI. 표준 라이브러리만. (state.json · pending/ · verify · guard · llm)
 ├── references/              ← 설계 근거(참고 서비스 분석), pass 흐름, 검증·가드 규칙, 라우팅
@@ -20,20 +20,20 @@ operator/
 ## 설치
 
 ```bash
-sh operator/install.sh                 # ~/.claude, ~/.codex, ~/.cursor, ~/.gemini 중 있는 곳에 링크
-sh operator/install.sh --project .     # 프로젝트 레벨 (.agents/skills/operator 등)
-sh operator/install.sh --print-hooks   # 훅 스니펫 출력
+sh jangin/install.sh                 # ~/.claude, ~/.codex, ~/.cursor, ~/.gemini 중 있는 곳에 링크
+sh jangin/install.sh --project .     # 프로젝트 레벨 (.agents/skills/jangin 등)
+sh jangin/install.sh --print-hooks   # 훅 스니펫 출력
 ```
 
 수동 설치는 폴더를 통째로 아래 중 한 곳에 두면 된다 (복사든 링크든).
 
 | 도구 | 사용자 레벨 | 프로젝트 레벨 |
 |---|---|---|
-| Claude Code | `~/.claude/skills/operator` | `.claude/skills/operator` |
-| Codex CLI | `~/.codex/skills/operator` | `.agents/skills/operator` 또는 `.codex/skills/operator` |
-| Cursor | `~/.cursor/skills/operator` | `.cursor/skills/operator` |
-| Gemini CLI | `~/.gemini/skills/operator` | `.gemini/skills/operator` |
-| 그 외 (Copilot, OpenCode 등) | 각 도구의 skills 디렉터리 | `.agents/skills/operator` (공용 규약) |
+| Claude Code | `~/.claude/skills/jangin` | `.claude/skills/jangin` |
+| Codex CLI | `~/.codex/skills/jangin` | `.agents/skills/jangin` 또는 `.codex/skills/jangin` |
+| Cursor | `~/.cursor/skills/jangin` | `.cursor/skills/jangin` |
+| Gemini CLI | `~/.gemini/skills/jangin` | `.gemini/skills/jangin` |
+| 그 외 (Copilot, OpenCode 등) | 각 도구의 skills 디렉터리 | `.agents/skills/jangin` (공용 규약) |
 
 스킬을 읽지 못하는 도구에서는 `assets/hooks/AGENTS.md.snippet` 을 프로젝트 `AGENTS.md` 에 붙여 넣는다.
 그러면 규칙은 지시로 전달되고, CLI(`scripts/op`)는 그대로 동작한다.
@@ -52,7 +52,7 @@ Cursor·Gemini 의 훅 이벤트 이름은 버전에 따라 다를 수 있으니
 
 ```bash
 op init                                   # 프로젝트 루트에서 한 번
-# 에이전트: "operator 로 이 아이디어를 plan 해 줘" → .operator/business.md
+# 에이전트: "jangin 으로 이 아이디어를 plan 해 줘" → .operator/business.md
 # 에이전트: "pass 한 번 돌려" → 리서치 → 초안 → 검증 → .operator/pending/
 op pending list                           # 승인 대기 보기
 op pending show 0001

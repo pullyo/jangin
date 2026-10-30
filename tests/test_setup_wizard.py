@@ -1,4 +1,4 @@
-"""`operator setup` 한국어 마법사와 install.sh 가 만드는 `operator` 명령.
+"""`jangin setup` 한국어 마법사와 install.sh 가 만드는 `jangin` 명령.
 
 마법사는 가짜 Hermes 창구와 미리 정한 답으로 돌린다. 설치 스크립트는 임시 HOME 과 가짜 `hermes` 명령으로 돌린다.
 실제 ~/.hermes 와 실제 Hermes 는 건드리지 않는다.
@@ -13,7 +13,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-WIZ = ROOT / 'hermes' / 'operator' / 'setup_wizard.py'
+WIZ = ROOT / 'hermes' / 'jangin' / 'setup_wizard.py'
 spec = importlib.util.spec_from_file_location('setup_wizard', WIZ)
 sw = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(sw)
@@ -21,7 +21,7 @@ spec.loader.exec_module(sw)
 
 class FakeHermes:
     def __init__(self, **info):
-        self.state = {'model': 'gpt-6-sol', 'provider': 'openai-codex', 'plugins': ['operator'], 'hooks': [],
+        self.state = {'model': 'gpt-6-sol', 'provider': 'openai-codex', 'plugins': ['jangin'], 'hooks': [],
                       'telegram': False, 'telegram_users': '', 'allow_all': False, 'operator_users': '', 'messengers': []}
         self.tools = info.pop('tools', None)
         self.state.update(info)
@@ -48,7 +48,7 @@ class FakeHermes:
 
     def enable_plugin(self):
         self.calls.append(('enable',))
-        self.state['plugins'].append('operator')
+        self.state['plugins'].append('jangin')
         return True
 
     def set_env(self, key, value):
@@ -117,9 +117,9 @@ class WizardTests(unittest.TestCase):
         self.assertEqual(s['folder'], self.folder)
         self.assertTrue(os.path.isdir(self.folder))
         self.assertEqual(s['human_via'], ['local', 'messenger'])
-        for h in ('◆ operator 플러그인', '◆ 프로젝트 폴더', '◆ 승인 방식', '◆ 메신저 승인', '◆ 두 번째 잠금 (셸 훅)', '◆ Operator 설정 완료'):
+        for h in ('◆ jangin 플러그인', '◆ 프로젝트 폴더', '◆ 승인 방식', '◆ 메신저 승인', '◆ 두 번째 잠금 (셸 훅)', '◆ Jangin 설정 완료'):
             self.assertIn(h, self.ui.out)
-        self.assertTrue(any('☤ Operator Setup' in l for l in self.ui.out))
+        self.assertTrue(any('☤ Jangin Setup' in l for l in self.ui.out))
 
     def test_strict_mode_opens_messenger_setup_and_narrows_operator_users(self):
         fake = FakeHermes()
@@ -171,7 +171,7 @@ class WizardTests(unittest.TestCase):
 class PluginSettingsTests(unittest.TestCase):
     def test_idea_uses_the_approval_mode_chosen_in_setup(self):
         with tempfile.TemporaryDirectory(prefix='op wizard 한글 ') as tmp:
-            spec2 = importlib.util.spec_from_file_location('op_commands', ROOT / 'hermes' / 'operator' / 'commands.py')
+            spec2 = importlib.util.spec_from_file_location('op_commands', ROOT / 'hermes' / 'jangin' / 'commands.py')
             mod = importlib.util.module_from_spec(spec2)
             spec2.loader.exec_module(mod)
             data = os.path.join(tmp, 'data')
@@ -209,41 +209,41 @@ class InstallCommandTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def install(self, *args):
-        return subprocess.run(['sh', str(ROOT / 'hermes' / 'operator' / 'install.sh'), *args], env=self.env, capture_output=True, text=True)
+        return subprocess.run(['sh', str(ROOT / 'hermes' / 'jangin' / 'install.sh'), *args], env=self.env, capture_output=True, text=True)
 
     def test_profile_install_creates_operator_command_that_routes_setup_to_the_wizard(self):
         r = self.install()
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        cmd = self.home / '.local' / 'bin' / 'operator'
+        cmd = self.home / '.local' / 'bin' / 'jangin'
         self.assertTrue(cmd.exists())
-        plug = self.home / '.hermes' / 'profiles' / 'operator' / 'plugins' / 'operator'
+        plug = self.home / '.hermes' / 'profiles' / 'jangin' / 'plugins' / 'jangin'
         self.assertTrue((plug / 'setup_wizard.py').exists())
         subprocess.run([str(cmd), 'chat', '-q', 'hi'], env=self.env, capture_output=True, text=True)
         subprocess.run([str(cmd), 'setup', 'model'], env=self.env, capture_output=True, text=True)
         subprocess.run([str(cmd), 'setup', '--hermes'], env=self.env, capture_output=True, text=True)
-        o = subprocess.run([str(cmd), 'setup', '--operator-only'], env=self.env, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+        o = subprocess.run([str(cmd), 'setup', '--jangin-only'], env=self.env, capture_output=True, text=True, stdin=subprocess.DEVNULL)
         self.assertIn('터미널', o.stdout)
         w = subprocess.run([str(cmd), 'setup'], env=self.env, capture_output=True, text=True, stdin=subprocess.DEVNULL)
         self.assertIn('터미널', w.stdout)   # 마법사가 받았다 (터미널이 없어서 안내만)
         log = self.log.read_text().splitlines()
-        self.assertIn('-p operator chat -q hi', log)
-        self.assertIn('-p operator setup model', log)
-        self.assertIn('-p operator setup', log)       # --hermes 는 원래 마법사
+        self.assertIn('-p jangin chat -q hi', log)
+        self.assertIn('-p jangin setup model', log)
+        self.assertIn('-p jangin setup', log)       # --hermes 는 원래 마법사
 
     def test_test_home_install_does_not_touch_the_operator_command(self):
         r = self.install('--home', str(self.home / 'test-home'))
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        self.assertFalse((self.home / '.local' / 'bin' / 'operator').exists())
+        self.assertFalse((self.home / '.local' / 'bin' / 'jangin').exists())
 
     def test_default_home_install_points_the_command_at_the_default_profile(self):
         r = self.install('--home', str(self.home / '.hermes'))
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        text = (self.home / '.local' / 'bin' / 'operator').read_text()
+        text = (self.home / '.local' / 'bin' / 'jangin').read_text()
         self.assertIn('-p "default"', text)
 
 
 class BootstrapTests(unittest.TestCase):
-    """저장소 맨 위 install.sh (한 줄 설치) 와 `operator update`. 저장소 사본(.git 없음)과 가짜 hermes 로 돈다."""
+    """저장소 맨 위 install.sh (한 줄 설치) 와 `jangin update`. 저장소 사본(.git 없음)과 가짜 hermes 로 돈다."""
 
     def setUp(self):
         import shutil
@@ -273,10 +273,10 @@ class BootstrapTests(unittest.TestCase):
         r = subprocess.run(['sh', str(self.src / 'install.sh')], env=self.env, capture_output=True, text=True, stdin=subprocess.DEVNULL)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn('[1/4] Hermes Agent: 이미 설치됨', r.stdout)
-        self.assertTrue((self.home / '.hermes' / 'profiles' / 'operator' / 'plugins' / 'operator' / 'setup_wizard.py').exists())
-        self.assertTrue((self.home / '.local' / 'bin' / 'operator').exists())
-        self.assertIn('profile create operator', self.log.read_text())
-        self.assertFalse((self.home / '.hermes' / 'plugins' / 'operator').exists())   # 기본 프로필은 건드리지 않는다
+        self.assertTrue((self.home / '.hermes' / 'profiles' / 'jangin' / 'plugins' / 'jangin' / 'setup_wizard.py').exists())
+        self.assertTrue((self.home / '.local' / 'bin' / 'jangin').exists())
+        self.assertIn('profile create jangin', self.log.read_text())
+        self.assertFalse((self.home / '.hermes' / 'plugins' / 'jangin').exists())   # 기본 프로필은 건드리지 않는다
 
     def test_without_hermes_and_without_consent_it_stops(self):
         env = {**self.env, 'PATH': f'{os.path.dirname(sys.executable)}:/usr/bin:/bin'}
@@ -287,7 +287,7 @@ class BootstrapTests(unittest.TestCase):
 
     def test_operator_update_updates_hermes_and_reinstalls(self):
         subprocess.run(['sh', str(self.src / 'install.sh')], env=self.env, capture_output=True, text=True, stdin=subprocess.DEVNULL)
-        r = subprocess.run([str(self.home / '.local' / 'bin' / 'operator'), 'update'], env=self.env, capture_output=True, text=True)
+        r = subprocess.run([str(self.home / '.local' / 'bin' / 'jangin'), 'update'], env=self.env, capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn('update', self.log.read_text().splitlines())
         self.assertIn('설치 완료', r.stdout)

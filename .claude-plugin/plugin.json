@@ -1,16 +1,16 @@
 {
-  "name": "operator",
+  "name": "jangin",
   "description": "아이디어부터 운영까지 같이 가는 AI 직원 루프. 발견 → 검증 → 만들기 → 운영 → 배우기 단계, 사람만 넘기는 단계 이동, 훅으로 막는 승인 게이트, 사람 쪽에서만 보내는 발송, 재개 가능한 pass, 검증 게이트.",
   "version": "0.6.0",
   "author": {
     "name": "pullyo",
     "url": "https://github.com/pullyo"
   },
-  "homepage": "https://github.com/pullyo/operator-skill",
-  "repository": "https://github.com/pullyo/operator-skill",
+  "homepage": "https://github.com/pullyo/jangin",
+  "repository": "https://github.com/pullyo/jangin",
   "license": "MIT",
   "keywords": [
-    "operator",
+    "jangin",
     "approval-gate",
     "human-in-the-loop",
     "agent-skills",

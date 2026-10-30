@@ -1,5 +1,5 @@
 {
-  "description": "operator 승인 게이트. .operator/ 가 있는 프로젝트에서만 발송·게시·배포·결제·삭제 명령과 승인 큐 경로 편집을 차단한다.",
+  "description": "jangin 승인 게이트. .operator/ 가 있는 프로젝트에서만 발송·게시·배포·결제·삭제 명령과 승인 큐 경로 편집을 차단한다.",
   "hooks": {
     "PreToolUse": [
       {
@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ -f \"${CLAUDE_PLUGIN_ROOT}/skills/operator/scripts/op.py\" ] || exit 0; exec python3 -I \"${CLAUDE_PLUGIN_ROOT}/skills/operator/scripts/op.py\" guard --format claude"
+            "command": "[ -f \"${CLAUDE_PLUGIN_ROOT}/skills/jangin/scripts/op.py\" ] || exit 0; exec python3 -I \"${CLAUDE_PLUGIN_ROOT}/skills/jangin/scripts/op.py\" guard --format claude"
           }
         ]
       }

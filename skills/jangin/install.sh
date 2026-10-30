@@ -1,9 +1,9 @@
 #!/bin/sh
-# operator 스킬을 여러 에이전트에 설치한다. 스킬 폴더를 각 도구의 스킬 디렉터리에 심볼릭 링크(기본) 또는 복사한다.
+# jangin 스킬을 여러 에이전트에 설치한다. 스킬 폴더를 각 도구의 스킬 디렉터리에 심볼릭 링크(기본) 또는 복사한다.
 #
 #   sh install.sh                      # 설치된 도구(~/.claude, ~/.codex, ~/.cursor, ~/.gemini)를 찾아 사용자 레벨에 링크
 #   sh install.sh --copy               # 링크 대신 복사
-#   sh install.sh --project DIR        # 프로젝트 레벨: DIR/.agents/skills/operator (+ 도구별 프로젝트 폴더)
+#   sh install.sh --project DIR        # 프로젝트 레벨: DIR/.agents/skills/jangin (+ 도구별 프로젝트 폴더)
 #   sh install.sh --targets claude,codex
 #   sh install.sh --print-hooks        # 훅 설정 스니펫을 실제 경로로 채워 출력 (설정 파일은 직접 수정하지 않는다)
 set -eu
@@ -35,11 +35,11 @@ place() { # place <dest-dir>
 if [ -n "$PROJECT" ]; then
   P=$(cd "$PROJECT" && pwd)
   echo "프로젝트 레벨 설치: $P"
-  place "$P/.agents/skills/operator"      # Codex 등 공용 규약
-  place "$P/.claude/skills/operator"      # Claude Code
-  place "$P/.cursor/skills/operator"      # Cursor
-  place "$P/.gemini/skills/operator"      # Gemini CLI
-  [ -f "$P/AGENTS.md" ] && grep -q "operator 운영 규칙" "$P/AGENTS.md" || {
+  place "$P/.agents/skills/jangin"      # Codex 등 공용 규약
+  place "$P/.claude/skills/jangin"      # Claude Code
+  place "$P/.cursor/skills/jangin"      # Cursor
+  place "$P/.gemini/skills/jangin"      # Gemini CLI
+  [ -f "$P/AGENTS.md" ] && grep -q "jangin 운영 규칙" "$P/AGENTS.md" || {
     echo "  i 훅을 못 쓰는 도구를 위해 $HERE/assets/hooks/AGENTS.md.snippet 을 $P/AGENTS.md 에 붙여 넣어라."; }
 else
   [ -z "$TARGETS" ] && {
@@ -50,12 +50,12 @@ else
   echo "사용자 레벨 설치: $TARGETS"
   for t in $(echo "$TARGETS" | tr ',' ' '); do
     case "$t" in
-      claude) place "$HOME/.claude/skills/operator" ;;
-      codex)  place "$HOME/.codex/skills/operator" ;;
-      cursor) place "$HOME/.cursor/skills/operator" ;;
-      gemini) place "$HOME/.gemini/skills/operator" ;;
-      hermes) place "$HOME/.hermes/skills/operator" ;;   # Hermes Agent (플러그인은 hermes/operator/install.sh)
-      agents) place "$HOME/.agents/skills/operator" ;;
+      claude) place "$HOME/.claude/skills/jangin" ;;
+      codex)  place "$HOME/.codex/skills/jangin" ;;
+      cursor) place "$HOME/.cursor/skills/jangin" ;;
+      gemini) place "$HOME/.gemini/skills/jangin" ;;
+      hermes) place "$HOME/.hermes/skills/jangin" ;;   # Hermes Agent (플러그인은 hermes/jangin/install.sh)
+      agents) place "$HOME/.agents/skills/jangin" ;;
       *) echo "  ? 모르는 타깃 $t" ;;
     esac
   done

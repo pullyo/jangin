@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- operator 매일 pass. PROJECT_DIR, AGENT_COMMAND 를 바꾼 뒤 ~/Library/LaunchAgents/ 에 두고 launchctl load. -->
+<!-- jangin 매일 pass. PROJECT_DIR, AGENT_COMMAND 를 바꾼 뒤 ~/Library/LaunchAgents/ 에 두고 launchctl load. -->
 <plist version="1.0">
 <dict>
   <key>Label</key><string>local.operator.daily</string>
