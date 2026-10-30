@@ -29,7 +29,8 @@ Claude Code, Codex, Cursor, Gemini CLI 지원은 그대로 둔다. Hermes 는 �
 1. Hermes Desktop 을 설치하고 처음 설정(모델 로그인)을 마친다.
 2. 설치: 지금은 저장소를 받아 `sh hermes/operator/install.sh` (프로필 `operator` 를 만들고 플러그인·스킬·SOUL.md 를 넣고 활성화).
    `hermes plugins install pullyo/operator-skill/hermes/operator` 는 하위 폴더만 받아서 스킬(op.py)이 빠진다 — 7절.
-3. `/setup` — 프로젝트 폴더 위치, 지금 프로젝트, 토큰 읽기(`/setup unlock`). (대화형 마법사와 하루 상한은 M4)
+3. 터미널에서 `operator setup` — 한국어 마법사: 모델 로그인, 플러그인, 프로젝트 폴더, 승인 방식, 메신저와 허용 사용자, 두 번째 잠금(셸 훅).
+   대화창의 `/setup` 은 폴더·지금 프로젝트·토큰 읽기(`/setup unlock`). (하루 상한은 M4)
 4. `/idea 동네 빵집 예약 페이지` — 프로젝트 폴더를 만들고 발견 단계가 시작된다. 에이전트가 한 번에 하나씩 묻는다.
 5. 발견 문서가 채워지면 에이전트가 "다음 단계로 넘길 준비가 됐습니다"라고 알린다. 사용자가 `/advance`.
 6. 만들기 단계: 에이전트가 마일스톤을 만들고, 사용자가 `/build 1` 로 Hermes `/goal` 반복을 시작한다 (6.1절).
@@ -141,7 +142,7 @@ operator 0.5.0 은 사람 확인을 두 가지로 한다: 대화형 터미널(TT
 | 2 ✓ | `op guard --format hermes` | Hermes 페이로드(`terminal`·`write_file`·`patch`(V4A 포함)·`read_file`·`execute_code`) 해석, exit 2 + `{"action":"block","message"}`. `cwd` 가 게이트웨이 폴더라 `workdir` 이 없으면 등록된 프로젝트(`~/.config/operator/projects.json`) 규칙을 적용 |
 | 3 ✓ | op 를 모듈로 | `init_project`, `status_summary`, `queue_items`, `pending_decide`, `stage_move`, `stage_overview`, `secret_store`. `die` 는 `OpError` 를 던지고 CLI `main` 이 처리 |
 | 4 ✓ | Hermes 플러그인 패키지 | `hermes/operator/`: 슬래시 명령, 플러그인 `pre_tool_call` 훅, 스킬 번들(`ctx.register_skill`), 시스템 프롬프트 안내, `SOUL.md`, `config.example.yaml`, `install.sh`. 카드·cron 은 아직 |
-| 5 | 설치 마법사 | `/operator setup` 대화형. 훅 설정을 config.yaml 에 쓰고 허용 목록 안내, 프로젝트 폴더, 하루 상한 |
+| 5 | 설치 마법사 | 완료: 터미널 `operator setup` (hermes/operator/setup_wizard.py). Hermes 함수로 config.yaml·.env·훅 허락 목록을 바꾼다. 남은 것: 하루 상한 |
 | 6 | 배포 티켓 | `type: deploy` — 배포·상태 확인·되돌리기 명령을 한 티켓에 담아 한 번에 승인. 상태 확인 실패 시 되돌리기 티켓 자동 생성 |
 | 7 | 예산 장치 | 하루 pass 수, 큐 상한(차면 예약 실행 중단), 실행 시간 상한 |
 | 9 | 만들기 반복 = Hermes `/goal` | 마일스톤 → 완료 계약, 검사 명령 → 품질 관문 `op milestone done <n>`. operator 는 테스트 약화 감지와 비용 상한만 더한다 (6.1절) |

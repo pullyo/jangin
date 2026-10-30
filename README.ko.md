@@ -126,7 +126,13 @@ Hermes 코드는 고치지 않고, 플러그인·스킬·성격(SOUL.md)만 넣�
 ```bash
 git clone https://github.com/pullyo/operator-skill
 sh operator-skill/hermes/operator/install.sh      # 프로필 'operator' 를 만들고 플러그인·스킬·성격을 넣는다
+# 쓰던 기본 Hermes 를 그대로 Operator 로 쓰려면: sh operator-skill/hermes/operator/install.sh --home ~/.hermes
+operator setup                                    # 한국어 설정 마법사
 ```
+
+`operator setup` 은 여섯 단계를 차례로 묻습니다: 모델 로그인(필요하면 Hermes 모델 설정으로), operator 플러그인 켜기,
+프로젝트 폴더, 승인 방식(데스크톱+메신저 또는 메신저만), 휴대폰 승인용 메신저와 허용 사용자, 플러그인이 꺼져도 막는
+두 번째 잠금(셸 훅). 원래 Hermes 마법사는 `operator setup --hermes`, 한 단계만은 `operator setup model` 처럼 씁니다.
 
 대화창(Desktop, 또는 연결한 텔레그램 등)에서:
 

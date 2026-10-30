@@ -22,10 +22,19 @@ PROMPT = (
 
 
 def _data_dir(ctx):
+    """<HERMES_HOME>/plugin-data/operator — `operator setup` 마법사와 같은 위치.
+    Hermes 가 주는 플러그인 폴더(plugin-data/agent-plugin-operator-<해시>)의 형제 폴더를 쓰고,
+    예전에 그 해시 폴더에 둔 settings.json 이 있으면 한 번 옮긴다."""
     state = getattr(ctx, "state", None)
-    d = getattr(state, "data_dir", None)
-    if d:
-        return str(d)
+    given = getattr(state, "data_dir", None)
+    if given:
+        stable = os.path.join(os.path.dirname(str(given)), "operator")
+        old = os.path.join(str(given), "settings.json")
+        new = os.path.join(stable, "settings.json")
+        if os.path.isfile(old) and not os.path.exists(new):
+            os.makedirs(stable, exist_ok=True)
+            os.replace(old, new)
+        return stable
     home = os.environ.get("HERMES_HOME") or os.path.join(os.path.expanduser("~"), ".hermes")
     return os.path.join(home, "plugin-data", "operator")
 

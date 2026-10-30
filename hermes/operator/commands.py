@@ -111,7 +111,8 @@ class Plugin:
             root = os.path.join(os.path.expanduser(s["folder"]), f"{name}-{n}")
             n += 1
         os.makedirs(root, exist_ok=True)
-        od, _ = op.init_project(root, stage="discover", send_mode="human", human_via_kinds=["local", "messenger"])
+        via = [k for k in (s.get("human_via") or ["local", "messenger"]) if k in ("local", "messenger")] or ["local", "messenger"]
+        od, _ = op.init_project(root, stage="discover", send_mode="human", human_via_kinds=via)
         doc = op.stage_doc(od, "discover")
         with open(doc, "w", encoding="utf-8") as f:
             f.write(op.STAGE_TEMPLATES["discover"].replace("# 발견\n", f"# 발견\n\n아이디어 (사용자가 처음 한 말): {' '.join(args.split())}\n", 1))
@@ -226,9 +227,12 @@ class Plugin:
             env = self.secrets(reload=True)
             ready = [ch for ch, spec in op.CHANNELS.items() if all(env.get(k) for k in spec["env"])]
             return "발송 토큰을 읽어 메모리에 두었습니다. 준비된 채널: " + (", ".join(ready) or "없음")
-        lines = [f"새 프로젝트 폴더: {s['folder']}", f"지금 프로젝트: {s.get('current') or '없음'}"]
+        via = s.get("human_via") or ["local", "messenger"]
+        lines = [f"새 프로젝트 폴더: {s['folder']}", f"지금 프로젝트: {s.get('current') or '없음'}",
+                 "새 프로젝트의 승인 방식: " + ("메신저만" if via == ["messenger"] else "데스크톱 앱과 메신저")]
         lines += [f"  · {k}: {v}" for k, v in sorted(s["projects"].items())]
-        lines += ["", "바꾸기: /setup folder <경로> · /setup use <프로젝트 이름|폴더>",
+        lines += ["", "처음 설정은 터미널에서 `operator setup` (한국어 마법사)",
+                  "바꾸기: /setup folder <경로> · /setup use <프로젝트 이름|폴더>",
                   "발송 토큰: 터미널에서 `op secret set <이름>` 으로 등록한 뒤 이 맥에서 `/setup unlock` (키체인 허락 창이 뜹니다).",
                   "토큰 값은 대화창에 붙여 넣지 마세요."]
         return "\n".join(lines)
