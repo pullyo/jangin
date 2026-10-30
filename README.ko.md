@@ -121,14 +121,17 @@ op telegram                          # 선택: 휴대폰으로 승인
 ## Hermes 에서 쓰기 (전용 사업 비서)
 
 [Hermes Agent](https://github.com/NousResearch/hermes-agent) 를 엔진으로 쓰면 터미널 없이 앱과 메신저로 씁니다.
-Hermes 코드는 고치지 않고, 플러그인·스킬·성격(SOUL.md)만 넣습니다. Hermes 0.22.5 에서 확인했습니다.
+Hermes 코드와 쓰던 Hermes(기본 프로필)는 그대로 두고, 그 옆에 **Operator 전용 프로필**을 만듭니다. Hermes 0.22.5 에서 확인했습니다.
 
 ```bash
-git clone https://github.com/pullyo/operator-skill
-sh operator-skill/hermes/operator/install.sh      # 프로필 'operator' 를 만들고 플러그인·스킬·성격을 넣는다
-# 쓰던 기본 Hermes 를 그대로 Operator 로 쓰려면: sh operator-skill/hermes/operator/install.sh --home ~/.hermes
-operator setup                                    # 한국어 설정 마법사
+curl -fsSL https://raw.githubusercontent.com/pullyo/operator-skill/main/install.sh | sh
 ```
+
+한 줄이 순서대로 합니다: Hermes 가 없으면 설치(먼저 묻습니다) → operator 를 `~/.operator/operator-skill` 에 받기 →
+쓰던 Hermes 를 복사해 `operator` 프로필 만들기(모델·API 키·스킬·플러그인·기억. OAuth 로그인은 Hermes 가 복사하지 않고
+기본 프로필 것을 이어받게 합니다) → `operator setup`. 이후에는 `operator` 명령 하나로 씁니다: `operator chat`,
+`operator setup`, `operator update`(Hermes 와 operator 를 함께 최신으로). Hermes 앱에서는 프로필 목록에서 Operator 를 고릅니다.
+그냥 `hermes` 는 원래 Hermes 그대로입니다.
 
 `operator setup` 은 먼저 원래 Hermes 설정 마법사(모델·로그인, 터미널, 메신저, 도구)를 그대로 진행하고, 끝나면 operator
 단계를 Hermes 마법사와 같은 화면(◆ 제목, 번호 선택, 엔터 = 지금 값 유지, Esc 취소)으로 이어서 묻습니다: operator 플러그인 켜기, 프로젝트 폴더, 승인 방식(데스크톱+메신저 또는 메신저만), 메신저 승인 허용

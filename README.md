@@ -122,15 +122,18 @@ op telegram                          # optional: approve from your phone
 ## Using it in Hermes (a dedicated business assistant)
 
 With [Hermes Agent](https://github.com/NousResearch/hermes-agent) as the engine you use operator from an app and from
-messengers, without a terminal. Hermes itself is not modified: operator adds a plugin, the skill and a personality (SOUL.md).
+messengers, without a terminal. Hermes and your existing default profile stay as they are: operator lives in its own **Operator profile** next to them.
 Checked against Hermes 0.22.5.
 
 ```bash
-git clone https://github.com/pullyo/operator-skill
-sh operator-skill/hermes/operator/install.sh      # creates the 'operator' profile with the plugin, skill and personality
-# to turn your existing default Hermes into Operator instead: add --home ~/.hermes
-operator setup                                    # guided setup (Korean)
+curl -fsSL https://raw.githubusercontent.com/pullyo/operator-skill/main/install.sh | sh
 ```
+
+The one line installs Hermes if it is missing (asking first), downloads operator to `~/.operator/operator-skill`, creates the
+`operator` profile as a copy of your default profile (model, API keys, skills, plugins, memory; Hermes does not copy OAuth
+grants, the profile inherits the default profile's login), and opens `operator setup`. Afterwards one command does everything:
+`operator chat`, `operator setup`, `operator update` (updates Hermes and operator together). In the Hermes app, pick the Operator
+profile; plain `hermes` stays stock Hermes.
 
 `operator setup` first runs the original Hermes setup wizard as-is (model and login, terminal, messaging, tools), then adds the
 operator steps in the same Hermes wizard style (◆ headers, numbered choices, Enter keeps the current value, Esc cancels): enabling the plugin, the project folder, the approval mode (desktop + messenger, or messenger only), the allowed

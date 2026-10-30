@@ -394,6 +394,20 @@ def find_hermes_python(agent_dir):
     return None
 
 
+def repair_hook():
+    """이 프로필에 걸린 operator 셸 훅이 다른 위치(복사 원본 프로필)의 op.py 를 가리키면 이 프로필 것으로 바꾼다.
+    훅이 없으면 아무것도 하지 않는다."""
+    from hermes_cli.config import load_config
+    hooks = (load_config().get("hooks") or {}).get("pre_tool_call") or []
+    cur = [h.get("command") for h in hooks if isinstance(h, dict) and is_operator_guard(h.get("command"))]
+    want = guard_command()
+    if not cur or not want or cur == [want]:
+        return 0
+    HermesBackend("default", "hermes").add_guard_hook(want)
+    print(f"  + 셸 훅 경로를 이 프로필 것으로 고쳤다: {want}")
+    return 0
+
+
 def inside(args):
     """Hermes 파이썬 안에서 돈다."""
     ui = HermesUI()
@@ -414,12 +428,25 @@ def main(argv=None):
     p.add_argument("--hermes", action="store_true", help="원래 Hermes 설정 마법사만 연다")
     p.add_argument("--operator-only", action="store_true", help="Hermes 기본 설정을 건너뛰고 operator 단계만")
     p.add_argument("--inside", action="store_true", help=argparse.SUPPRESS)
+    p.add_argument("--repair-hook", action="store_true", help=argparse.SUPPRESS)
+    p.add_argument("--home", help=argparse.SUPPRESS)
     args, rest = p.parse_known_args(argv)
     if args.inside:
+        if args.repair_hook:
+            return repair_hook()
         return inside(args)
     hermes_bin = shutil.which("hermes") or os.path.join(os.path.expanduser("~"), ".local", "bin", "hermes")
     if args.hermes:
         return subprocess.call([hermes_bin, "-p", args.profile, "setup", *rest])
+    if args.repair_hook:   # install.sh 가 부른다: 터미널 없이, Hermes 파이썬 안에서
+        agent_dir = os.environ.get("HERMES_AGENT_DIR") or os.path.join(os.path.expanduser("~"), ".hermes", "hermes-agent")
+        py = find_hermes_python(agent_dir)
+        if not py:
+            print("  ! Hermes 파이썬을 찾지 못해 셸 훅 경로를 고치지 못했다. `operator setup` 의 두 번째 잠금에서 다시 걸어 주세요.")
+            return 1
+        home = args.home or hermes_home(args.profile)
+        env = dict(os.environ, PYTHONPATH=agent_dir, HERMES_HOME=home)
+        return subprocess.call([py, os.path.abspath(__file__), "--inside", "--repair-hook"], cwd=agent_dir, env=env)
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
         print("operator setup 은 질문에 답하는 대화형 마법사라 터미널에서 실행해야 합니다.")
         return 2

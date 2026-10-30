@@ -242,5 +242,56 @@ class InstallCommandTests(unittest.TestCase):
         self.assertIn('-p "default"', text)
 
 
+class BootstrapTests(unittest.TestCase):
+    """저장소 맨 위 install.sh (한 줄 설치) 와 `operator update`. 저장소 사본(.git 없음)과 가짜 hermes 로 돈다."""
+
+    def setUp(self):
+        import shutil
+        self.tmp = tempfile.TemporaryDirectory(prefix='op bootstrap 한글 ')
+        self.home = Path(self.tmp.name)
+        self.src = self.home / 'src'
+        self.src.mkdir()
+        for part in ('install.sh', 'hermes', 'skills'):
+            (shutil.copytree if (ROOT / part).is_dir() else shutil.copy2)(ROOT / part, self.src / part)
+        self.bin = self.home / 'fakebin'
+        self.bin.mkdir()
+        self.log = self.home / 'hermes.log'
+        fake = self.bin / 'hermes'
+        fake.write_text('#!/bin/sh\n'
+                        f'echo "$*" >> "{self.log}"\n'
+                        'if [ "$1" = "profile" ] && [ "$2" = "create" ]; then mkdir -p "$HOME/.hermes/profiles/$3"; fi\n'
+                        'if [ "$1" = "--version" ]; then echo "Hermes Agent v0.0 (fake)"; fi\n'
+                        'exit 0\n', encoding='utf-8')
+        fake.chmod(0o755)
+        self.env = {**os.environ, 'HOME': str(self.home), 'PATH': f'{self.bin}:{os.path.dirname(sys.executable)}:/usr/bin:/bin',
+                    'OPERATOR_SOURCE': str(self.src), 'OPERATOR_NO_SETUP': '1'}
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_one_line_install_creates_the_operator_profile_and_command(self):
+        r = subprocess.run(['sh', str(self.src / 'install.sh')], env=self.env, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn('[1/4] Hermes Agent: 이미 설치됨', r.stdout)
+        self.assertTrue((self.home / '.hermes' / 'profiles' / 'operator' / 'plugins' / 'operator' / 'setup_wizard.py').exists())
+        self.assertTrue((self.home / '.local' / 'bin' / 'operator').exists())
+        self.assertIn('profile create operator', self.log.read_text())
+        self.assertFalse((self.home / '.hermes' / 'plugins' / 'operator').exists())   # 기본 프로필은 건드리지 않는다
+
+    def test_without_hermes_and_without_consent_it_stops(self):
+        env = {**self.env, 'PATH': f'{os.path.dirname(sys.executable)}:/usr/bin:/bin'}
+        r = subprocess.run(['sh', str(self.src / 'install.sh')], env=env, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn('Hermes Agent 가 아직 없습니다', r.stdout)
+        self.assertFalse((self.home / '.hermes').exists())
+
+    def test_operator_update_updates_hermes_and_reinstalls(self):
+        subprocess.run(['sh', str(self.src / 'install.sh')], env=self.env, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+        r = subprocess.run([str(self.home / '.local' / 'bin' / 'operator'), 'update'], env=self.env, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn('update', self.log.read_text().splitlines())
+        self.assertIn('설치 완료', r.stdout)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -27,7 +27,9 @@ Claude Code, Codex, Cursor, Gemini CLI 지원은 그대로 둔다. Hermes 는 �
 ## 2. 사용자가 겪는 흐름
 
 1. Hermes Desktop 을 설치하고 처음 설정(모델 로그인)을 마친다.
-2. 설치: 지금은 저장소를 받아 `sh hermes/operator/install.sh` (프로필 `operator` 를 만들고 플러그인·스킬·SOUL.md 를 넣고 활성화).
+2. 설치: `curl -fsSL https://raw.githubusercontent.com/pullyo/operator-skill/main/install.sh | sh` — Hermes 가 없으면 설치, operator 받기,
+   기본 프로필을 `--clone-all` 로 복사해 `operator` 프로필 생성(OAuth 는 Hermes 가 복사하지 않고 이어받게 함), 플러그인·스킬·SOUL.md 설치.
+   쓰던 Hermes(기본 프로필)는 건드리지 않는다. 업데이트는 `operator update`.
    `hermes plugins install pullyo/operator-skill/hermes/operator` 는 하위 폴더만 받아서 스킬(op.py)이 빠진다 — 7절.
 3. 터미널에서 `operator setup` — 원래 Hermes 마법사(모델·터미널·메신저·도구)를 먼저 그대로 돌리고, 이어서 한국어 operator 단계: 플러그인, 프로젝트 폴더, 승인 방식, 메신저 승인 허용 사용자, 두 번째 잠금(셸 훅).
    대화창의 `/setup` 은 폴더·지금 프로젝트·토큰 읽기(`/setup unlock`). (하루 상한은 M4)
