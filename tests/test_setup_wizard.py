@@ -23,8 +23,17 @@ class FakeHermes:
     def __init__(self, **info):
         self.state = {'model': 'gpt-6-sol', 'provider': 'openai-codex', 'plugins': ['operator'], 'hooks': [],
                       'telegram': False, 'telegram_users': '', 'allow_all': False, 'operator_users': '', 'messengers': []}
+        self.tools = info.pop('tools', None)
         self.state.update(info)
         self.calls = []
+
+    def tool_states(self, platform='cli'):
+        return dict(self.tools or {})
+
+    def set_tool(self, name, on, platform='cli'):
+        self.calls.append(('tool', name, on))
+        self.tools[name] = on
+        return True
 
     def info(self):
         return dict(self.state)
@@ -143,6 +152,15 @@ class WizardTests(unittest.TestCase):
         code, s = self.run_wizard(FakeHermes(), ['n', '', '', 'n', 'n'])
         self.assertEqual(s['folder'], self.folder)
         self.assertEqual(s['human_via'], ['messenger'])
+
+    def test_tools_step_toggles_only_what_changes(self):
+        fake = FakeHermes(tools={'web': False, 'computer_use': True, 'browser': True, 'x_search': False, 'kanban': False})
+        # Hermes n · 폴더 · 승인 엔터 · 웹 켤까요(엔터=Y) · 화면 조작 n · 브라우저 엔터(유지) · X 검색 y · 칸반 엔터(유지) · 셸 훅 n
+        self.run_wizard(fake, ['n', self.folder, '', '', 'n', '', 'y', '', 'n'])
+        tool_calls = [c for c in fake.calls if c[0] == 'tool']
+        self.assertEqual(tool_calls, [('tool', 'web', True), ('tool', 'computer_use', False), ('tool', 'x_search', True)])
+        self.assertIn('◆ 도구', self.ui.out)
+        self.assertTrue(any('승인 큐를 거치지 않습니다' in l for l in self.ui.out))   # 브라우저가 켜져 있으면 알림
 
     def test_needs_a_terminal(self):
         r = subprocess.run([sys.executable, '-I', str(WIZ)], capture_output=True, text=True, stdin=subprocess.DEVNULL)

@@ -13,6 +13,7 @@
   ◆ 프로젝트 폴더      /idea 로 만드는 프로젝트가 들어갈 폴더
   ◆ 승인 방식          새 프로젝트가 사람의 결정을 어디서 받을지 (데스크톱+메신저 / 메신저만)
   ◆ 메신저 승인        operator 명령을 칠 수 있는 사람을 본인으로 좁힌다
+  ◆ 도구               컴퓨터 화면 조작, 브라우저 자동 조작, X 검색, 칸반을 켜고 끈다 (Hermes `tools` 명령으로)
   ◆ 두 번째 잠금       플러그인이 꺼져도 막는 셸 훅
 
 `operator setup --operator-only` 는 Hermes 기본 설정을 건너뛰고, `operator setup --hermes` 는 원래 Hermes 마법사만 연다.
@@ -30,6 +31,18 @@ OP_PY_CANDIDATES = (os.path.join(HERE, "skill", "scripts", "op.py"),
                     os.path.join(HERE, "..", "..", "skills", "operator", "scripts", "op.py"))
 APPROVAL_CHOICES = (["local", "messenger"], ["messenger"])
 APPROVAL_LABELS = ("데스크톱 앱과 메신저 둘 다 (편함)", "메신저만 (엄격, 메신저 연결 필요)")
+
+# (Hermes 도구 이름, 화면 이름, 권장, 설명). 권장은 설명에만 쓰고, 엔터는 지금 값을 유지한다.
+TOOL_CHOICES = (
+    ("computer_use", "컴퓨터 화면 조작", False,
+     "이 맥의 앱 화면을 클릭하고 입력합니다. operator 가드를 거치지 않아 승인 없이 게시·배포 버튼을 누를 수 있습니다. 권장: 끄기."),
+    ("browser", "브라우저 자동 조작", True,
+     "만든 사이트를 열어 확인할 때 씁니다. 웹사이트의 게시 버튼도 누를 수 있고 operator 가드는 클릭을 검사하지 않습니다. 권장: 켜기, 대신 결과를 확인하세요."),
+    ("x_search", "X 검색", True,
+     "검증·배우기 단계에서 사람들이 실제로 남긴 글을 찾습니다. xAI 로그인이 필요할 수 있습니다. 권장: 켜기."),
+    ("kanban", "칸반 (여러 작업 나눠 돌리기)", False,
+     "만들기 단계에서 마일스톤 여러 개를 따로 돌릴 때 씁니다. 처음에는 꺼 둬도 됩니다."),
+)
 
 
 def hermes_home(profile):
@@ -165,6 +178,20 @@ class HermesBackend:
         from hermes_cli.config import save_env_value
         save_env_value(key, value)
 
+    def tool_states(self, platform="cli"):
+        """`hermes tools list` 의 ✓ enabled / ✗ disabled 줄을 읽는다. {이름: 켜짐}"""
+        r = subprocess.run([self.bin, "-p", self.profile, "tools", "list", "--platform", platform], capture_output=True, text=True)
+        out = {}
+        for line in r.stdout.splitlines():
+            parts = line.split()
+            if len(parts) >= 3 and parts[1] in ("enabled", "disabled"):
+                out[parts[2]] = parts[1] == "enabled"
+        return out
+
+    def set_tool(self, name, on, platform="cli"):
+        return subprocess.call([self.bin, "-p", self.profile, "tools", "enable" if on else "disable", "--platform", platform, name],
+                               stdout=subprocess.DEVNULL) == 0
+
     def add_guard_hook(self, cmd):
         from hermes_cli.config import load_config, save_config
         from agent import shell_hooks
@@ -214,10 +241,10 @@ class OperatorSetup:
                      "질문마다 지금 값이 기본으로 보입니다. 엔터를 누르면 그대로 유지됩니다.",
                      "왼쪽 화살표로 이전 질문, Esc 로 취소합니다.")
         self.ui.run_steps([("operator 플러그인", self.plugin), ("프로젝트 폴더", self.folder), ("승인 방식", self.approval),
-                           ("메신저 승인", self.messenger), ("두 번째 잠금", self.guard_hook)])
+                           ("메신저 승인", self.messenger), ("도구", self.tools), ("두 번째 잠금", self.guard_hook)])
         self.save()
         self.ui.header("Operator 설정 완료")
-        for k in ("모델", "operator 플러그인", "프로젝트 폴더", "승인 방식", "메신저 승인", "두 번째 잠금"):
+        for k in ("모델", "operator 플러그인", "프로젝트 폴더", "승인 방식", "메신저 승인", "도구", "두 번째 잠금"):
             if k in self.summary:
                 self.ui.success(f"{k}: {self.summary[k]}")
         self.ui.info(None, "다음: Hermes 앱에서 새 대화를 열고  /idea 동네 빵집 예약 페이지  처럼 시작하세요.",
@@ -262,6 +289,8 @@ class OperatorSetup:
         self.ui.header("승인 방식")
         cur = self.s.get("human_via") or APPROVAL_CHOICES[0]
         default = 1 if cur == APPROVAL_CHOICES[1] else 0
+        self.ui.info("데스크톱 앱에서 친 명령은 같은 컴퓨터의 다른 프로그램이 흉내 낼 수 있습니다.",
+                     "실제 계정을 연결한다면 휴대폰 메신저에서만 받는 쪽이 안전합니다.")
         n = self.ui.choose("사람의 결정(/ok, /advance)을 어디서 받을까요?", APPROVAL_LABELS, default,
                            description="데스크톱 앱에서 친 명령은 같은 컴퓨터의 다른 프로그램이 흉내 낼 수 있습니다. "
                                        "실제 계정을 연결한다면 휴대폰 메신저에서만 받는 쪽이 안전합니다.")
@@ -297,6 +326,36 @@ class OperatorSetup:
             self.ui.success("저장했습니다. `operator gateway restart` 후 적용됩니다.")
         self.summary["메신저 승인"] = f"{', '.join(info['messengers'])}, 허용 사용자 {users or '지정 안 함'}"
 
+    def tools(self):
+        self.ui.header("도구")
+        states = self.h.tool_states("cli")
+        if not states:
+            self.ui.warn("Hermes 도구 목록을 읽지 못해 건너뜁니다. 나중에 `operator tools` 로 바꿀 수 있습니다.")
+            self.summary["도구"] = "건너뜀"
+            return
+        if states.get("web") is False:
+            if self.ui.yes("웹 검색이 꺼져 있습니다. 켤까요?", True, description="발견·검증 단계의 조사에 꼭 필요합니다."):
+                self.h.set_tool("web", True)
+        self.ui.info("Hermes 터미널·데스크톱 앱(cli)에 적용합니다. 질문마다 엔터를 누르면 지금 값이 유지됩니다.")
+        on_list = []
+        for name, label, recommended, why in TOOL_CHOICES:
+            if name not in states:
+                continue
+            cur = states[name]
+            self.ui.info(None, f"{label}: {why}")   # 전체 화면 메뉴가 아닐 때도 설명이 보이게
+            want = self.ui.yes(f"{label} — 지금 {'켜짐' if cur else '꺼짐'}. 켤까요?", cur, description=why)
+            if want != cur:
+                if self.h.set_tool(name, want):
+                    self.ui.success(f"{label}: {'켰습니다' if want else '껐습니다'}")
+                else:
+                    self.ui.warn(f"{label}: 바꾸지 못했습니다. `operator tools {'enable' if want else 'disable'} {name}`")
+                    want = cur
+            if want:
+                on_list.append(label)
+        if "브라우저 자동 조작" in on_list or "컴퓨터 화면 조작" in on_list:
+            self.ui.info("참고: 브라우저와 컴퓨터 조작은 operator 승인 큐를 거치지 않습니다. 결과를 꼭 확인하세요.")
+        self.summary["도구"] = "켜짐 " + (", ".join(on_list) if on_list else "없음 (선택 도구 기준)")
+
     def guard_hook(self):
         self.ui.header("두 번째 잠금 (셸 훅)")
         cmd = guard_command()
@@ -308,6 +367,7 @@ class OperatorSetup:
             self.ui.info("이미 걸려 있습니다.")
             self.summary["두 번째 잠금"] = "켜짐"
             return
+        self.ui.info("기본 잠금은 operator 플러그인입니다. 셸 훅은 플러그인이 꺼지거나 깨졌을 때를 위한 두 번째 잠금입니다.")
         if self.ui.yes("셸 훅을 걸까요?", True,
                        description="기본 잠금은 operator 플러그인입니다. 셸 훅을 더하면 플러그인이 꺼지거나 깨져도 "
                                    "배포·게시·삭제 명령을 막습니다. op.py 를 못 찾으면 막는 쪽으로 동작합니다."):

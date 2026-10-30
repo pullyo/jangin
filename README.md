@@ -134,7 +134,8 @@ operator setup                                    # guided setup (Korean)
 
 `operator setup` first runs the original Hermes setup wizard as-is (model and login, terminal, messaging, tools), then adds the
 operator steps in the same Hermes wizard style (◆ headers, numbered choices, Enter keeps the current value, Esc cancels): enabling the plugin, the project folder, the approval mode (desktop + messenger, or messenger only), the allowed
-user for messenger approvals, and a second lock (a shell hook that blocks even if the plugin is off). `operator setup --operator-only`
+user for messenger approvals, tools (computer use, browser automation, X search, kanban; browser and computer use are not
+checked by the operator guard, so turn computer use off once real accounts are connected), and a second lock (a shell hook that blocks even if the plugin is off). `operator setup --operator-only`
 skips the Hermes part, `operator setup --hermes` runs only the Hermes wizard, and `operator setup model` runs one Hermes section.
 
 In the chat (Desktop, or a connected Telegram etc.): `/idea <one line>`, `/project`, `/stage`, `/advance`, `/back <stage> <reason>`,

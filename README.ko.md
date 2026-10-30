@@ -132,7 +132,8 @@ operator setup                                    # 한국어 설정 마법사
 
 `operator setup` 은 먼저 원래 Hermes 설정 마법사(모델·로그인, 터미널, 메신저, 도구)를 그대로 진행하고, 끝나면 operator
 단계를 Hermes 마법사와 같은 화면(◆ 제목, 번호 선택, 엔터 = 지금 값 유지, Esc 취소)으로 이어서 묻습니다: operator 플러그인 켜기, 프로젝트 폴더, 승인 방식(데스크톱+메신저 또는 메신저만), 메신저 승인 허용
-사용자, 플러그인이 꺼져도 막는 두 번째 잠금(셸 훅). operator 단계만은 `operator setup --operator-only`, Hermes 마법사만은
+사용자, 도구(컴퓨터 화면 조작, 브라우저 자동 조작, X 검색, 칸반 켜고 끄기), 플러그인이 꺼져도 막는 두 번째 잠금(셸 훅).
+브라우저와 컴퓨터 화면 조작은 operator 가드를 거치지 않으므로, 실제 계정을 연결했다면 컴퓨터 화면 조작은 끄는 것을 권합니다. operator 단계만은 `operator setup --operator-only`, Hermes 마법사만은
 `operator setup --hermes`, Hermes 의 한 단계만은 `operator setup model` 처럼 씁니다.
 
 대화창(Desktop, 또는 연결한 텔레그램 등)에서:
