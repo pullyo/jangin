@@ -248,7 +248,11 @@ class Plugin:
             rp = os.path.realpath(p if os.path.isabs(p) else os.path.join(base, p))
             if rp == sdir or rp.startswith(sdir + os.sep):
                 return "[operator 승인 게이트] 비밀값과 operator 설정 폴더는 사람이 띄운 프로세스만 읽고 쓴다."
-        for od in op.operator_roots(base, cmd, paths):
+        roots = op.operator_roots(base, cmd, paths)
+        if not (isinstance(workdir, str) and os.path.isabs(workdir)) and not session_cwd:
+            # 세션 폴더를 모르면 셸 훅처럼 등록된 프로젝트 전부의 규칙으로 판단한다 (모르면 막는 쪽)
+            roots += [os.path.join(r, op.OP_DIR_NAME) for r in op.known_projects() if os.path.join(r, op.OP_DIR_NAME) not in roots]
+        for od in roots:
             deny, reason = op.guard_decide(cmd, paths, od, base)
             if deny:
                 return "[operator 승인 게이트] " + reason

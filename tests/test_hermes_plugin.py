@@ -117,6 +117,9 @@ class PluginTests(unittest.TestCase):
         self.assertIn('승인 게이트', self.plugin.guard('read_file', {'path': str(self.base / 'home/.config/operator/env')}, '/'))
         self.assertIn('승인 게이트', self.plugin.guard('execute_code', {'code': 'import op; op.pending_decide(d, "0001", "approve", op.Authority("local"))'}, str(self.project)))
         self.assertIsNone(self.plugin.guard('web_search', {'query': 'git push'}, str(self.project)))
+        # no session folder (e.g. outside a turn): registered projects' rules apply
+        self.assertIn('승인 게이트', self.plugin.guard('terminal', {'command': 'wrangler deploy'}, ''))
+        self.assertIsNone(self.plugin.guard('terminal', {'command': 'ls'}, ''))
 
 
 if __name__ == '__main__':
