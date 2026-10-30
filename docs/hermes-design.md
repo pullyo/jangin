@@ -32,7 +32,8 @@ Claude Code, Codex, Cursor, Gemini CLI 지원은 그대로 둔다. Hermes 는 �
 3. `/setup` — 프로젝트 폴더 위치, 지금 프로젝트, 토큰 읽기(`/setup unlock`). (대화형 마법사와 하루 상한은 M4)
 4. `/idea 동네 빵집 예약 페이지` — 프로젝트 폴더를 만들고 발견 단계가 시작된다. 에이전트가 한 번에 하나씩 묻는다.
 5. 발견 문서가 채워지면 에이전트가 "다음 단계로 넘길 준비가 됐습니다"라고 알린다. 사용자가 `/advance`.
-6. 만들기 단계: 에이전트가 마일스톤을 만들고 검사를 통과시킨다. 첫 배포는 승인 카드로 온다.
+6. 만들기 단계: 에이전트가 마일스톤을 만들고, 사용자가 `/build 1` 로 Hermes `/goal` 반복을 시작한다 (6.1절).
+   검사가 통과하면 반복이 끝나고, 다음 단계로는 사람이 `/advance`. 첫 배포는 승인 대기로 온다.
 7. `/inbox` 에서 확인하고 `/ok 0003` → 플러그인이 게이트웨이 프로세스에서 실행·발송한다. (상태 확인·되돌리기 티켓은 M5)
 8. 운영·배우기: 매일 아침 예약 실행이 초안을 큐에 올리고 카드로 알린다. 주간 회고가 메신저로 온다.
 
@@ -143,6 +144,7 @@ operator 0.5.0 은 사람 확인을 두 가지로 한다: 대화형 터미널(TT
 | 5 | 설치 마법사 | `/operator setup` 대화형. 훅 설정을 config.yaml 에 쓰고 허용 목록 안내, 프로젝트 폴더, 하루 상한 |
 | 6 | 배포 티켓 | `type: deploy` — 배포·상태 확인·되돌리기 명령을 한 티켓에 담아 한 번에 승인. 상태 확인 실패 시 되돌리기 티켓 자동 생성 |
 | 7 | 예산 장치 | 하루 pass 수, 큐 상한(차면 예약 실행 중단), 실행 시간 상한 |
+| 9 | 만들기 반복 = Hermes `/goal` | 마일스톤 → 완료 계약, 검사 명령 → 품질 관문 `op milestone done <n>`. operator 는 테스트 약화 감지와 비용 상한만 더한다 (6.1절) |
 | 8 | 감독 에이전트 | 플러그인이 다른 모델로 기준표 검토를 돌려 결과를 티켓에 기록 (에이전트가 스스로 적지 못함) |
 
 ## 6. 단계별 구현 순서
@@ -151,9 +153,50 @@ operator 0.5.0 은 사람 확인을 두 가지로 한다: 대화형 터미널(TT
 2. ✓ **M1 정직한 기반** — 0, 1, 3. Claude Code·Codex 경로도 함께 좋아진다.
 3. ✓ **M2 Hermes 안에서 막기** — 2. 스킬 + 셸 훅만으로 Hermes 에서 단계·큐·차단이 동작.
 4. ✓ **M3 사람의 손 플러그인** — 4. 슬래시 명령으로 승인·단계 이동, 발송을 플러그인에서. (카드 버튼은 아직)
-5. **M4 쉬운 시작** — 5, 7. 설치 마법사와 예산 장치. 일반 사용자 첫 시험.
+5. **M4 쉬운 시작** — 5, 7, 9. 설치 마법사, 예산 장치, 만들기 반복을 `/goal` 에 연결. 일반 사용자 첫 시험.
 6. **M5 배포 관리** — 6. 비전 3순위.
 7. **M6 품질** — 8, 격리 등급 2 안내와 설정 도우미.
+
+### 6.1 만들기 단계: 반복은 Hermes `/goal` 이, 기준은 operator 가
+
+Hermes `/goal` 은 이미 "끝날 때까지 계속" 반복(랄프 루프)을 갖고 있다. operator 는 반복을 따로 만들지 않고 연결만 한다.
+(근거: `website/docs/user-guide/features/goals.md`, `hermes_cli/goals.py`, Hermes 0.22.5 소스. 실행 시험은 아직)
+
+| Hermes `/goal` 이 이미 하는 것 | 내용 |
+|---|---|
+| 품질 관문 `/goal gate add <명령>` | 판정 모델보다 먼저 돈다. exit 0 이어야 완료 판정으로 간다. 실패하면 종료 코드와 출력 끝 약 3KB 가 다음 반복의 입력. 관문당 기본 3회 재시도·5분 제한, 다 쓰면 자동 일시정지. 관문은 세션 작업 폴더에서 돈다(`_gate_workspace`) |
+| 완료 계약 | outcome, verification, constraints, boundaries, stop_when. `/goal draft` 로 초안, `/subgoal` 로 기준 추가 |
+| 반복 상한 | `goals.max_turns` (기본 20) 뒤 자동 일시정지. 판정 모델이 done/continue/blocked/wait. 불가능하면 blocked 로 멈춤 |
+| 기다리기·이어가기 | 백그라운드 빌드·CI 를 기다리는 wait(최대 30분), SessionDB 에 저장돼 `/resume` 뒤 이어짐 |
+| 권한 | 메신저에서 `/goal gate add` 는 게이트웨이 관리자만. 에이전트는 슬래시 명령을 칠 수 없다(로컬 소켓 예외는 4절) |
+
+연결 방식 (M4):
+
+1. 에이전트가 만들기 단계에서 `op milestone add "예약 폼" --test "npm test -- form"` 으로 마일스톤을 등록한다 (지금과 같음).
+2. 사용자가 `/build 1` (operator 플러그인 명령). 플러그인이 마일스톤 1 을 완료 계약으로 바꾼다:
+   outcome = 마일스톤 제목, verification = 검사 명령, constraints = `.operator/stages/build.md` 의 범위와 operator 규칙,
+   boundaries = 배포·게시·발송·결제 금지(승인 대기로), stop_when = 관문 통과 또는 비용 상한.
+3. 관문은 검사 명령 그대로가 아니라 **`op milestone done 1`** 이다. 이 명령이 검사 명령을 돌리고, 아래 (a) 검사까지 통과해야
+   exit 0 이다. 그래서 반복이 끝나면 `milestones.json` 에 통과 기록이 남고, 관문과 operator 의 완료 기준이 하나가 된다.
+4. 반복이 끝나도 단계는 그대로다. 다음 단계로는 사람이 `/advance` 한다 (`stage_move` 는 사람 경로만 받는다).
+
+Hermes 에 없어서 operator 가 채우는 것:
+
+| | 무엇 | 어떻게 |
+|---|---|---|
+| (a) | 테스트 삭제·약화 방지 | 관문이 통과하려면 에이전트가 코드를 고치는 대신 테스트를 지우거나 약하게 만들 수 있다. `op milestone add --protect "tests/**"` 로 보호할 테스트를 정하면 등록 순간의 파일 목록·해시·테스트 개수를 `milestones.json` 에 남긴다. `op milestone done` 은 보호 파일이 사라졌거나 테스트 개수가 줄면 실패한다(바뀐 파일은 목록으로 보여 주고, 사람이 `/build` 를 다시 할 때 새 기준을 받는다). 반복 중에는 가드가 보호 파일의 삭제·덮어쓰기를 막는다(`guard.json` 의 `protect_paths`, 마일스톤이 열려 있을 때만) |
+| (b) | 금액 기준 비용 상한 | Hermes 에서 금액 상한은 MCP 도구 비용의 `spend_limit`(채팅당)과 Nous 포털의 월 한도(포털에서만, 읽기 전용) 뿐이고, 모델 호출 비용으로 반복을 멈추는 설정은 찾지 못했다. Hermes 는 세션마다 `estimated_cost_usd` 를 state.db 에 기록한다. 플러그인이 이 값을 읽어 `/build` 에 정한 상한(예: `/build 1 --budget 3`)을 넘으면 `pre_tool_call` 훅에서 도구 호출을 막고 반복을 멈추게 한다. 턴 상한(`goals.max_turns`)은 그 밑의 두 번째 상한 |
+| (c) | 단계 이동은 사람만 | 이미 있다 (`stage_move` + authority). `/goal` 이 done 이 돼도 `/advance` 는 사람이 친다 |
+
+체크포인트(반복마다 되돌리기): Hermes 에 있다. `checkpoints.enabled: true` (기본 꺼짐)면 `write_file`·`patch` 와 파괴적인 터미널
+명령(`rm`, `mv`, `sed -i`, `>`, `git reset` 등) 전에 턴마다·폴더마다 한 번 그림자 git 저장소에 스냅숏을 남기고, 사람이
+`/rollback <N>` 으로 되돌린다. 자동으로 되돌리지는 않고, docker 같은 컨테이너 백엔드에서는 되돌리기를 거부한다.
+operator 는 자체 체크포인트를 만들지 않고, 프로필 설정에서 `checkpoints.enabled: true` 를 권한다.
+
+확인할 것 (시험 단계): 플러그인이 `/goal` 을 코드로 시작할 공개 API 가 있는지(없으면 `/build` 가 사용자에게 `/goal …` 과
+`/goal gate add …` 두 줄을 보여 주고 사용자가 친다. `hermes_cli.goals.GoalManager` 를 직접 쓰는 건 내부 API 라 피한다),
+에이전트가 칸반 도구(`kanban_create`)로 `--goal` 카드를 만들어 관문을 스스로 정할 수 있는지, `estimated_cost_usd` 가
+반복 중에 바로 갱신되는지, 관문이 도는 폴더가 Desktop 세션의 프로젝트 폴더와 같은지.
 
 ## 7. 검증 결과 (Hermes v0.22.5, 2026-10-30)
 
@@ -185,6 +228,7 @@ operator 0.5.0 은 사람 확인을 두 가지로 한다: 대화형 터미널(TT
 | 게이트웨이(Desktop·launchd)에서 키체인 허락 창이 뜨는지 | `/setup unlock` 을 이 맥에서 직접 |
 | 메신저 카드에 승인 버튼 붙이기 | `ctx.post_message` 는 글만 확인. 버튼은 Hermes 의 승인 전송(`register_approval_transport`)을 써야 할 수 있다 |
 | docker 백엔드에서 `.operator/` 일부만 `:ro` | 격리 등급 2, M6 |
+| `/goal` 연결 (6.1절): 플러그인이 goal 을 코드로 시작할 수 있는지, 칸반 `--goal`, 비용 값 갱신 시점, 관문 폴더 | 소스와 문서만 읽었다. M4 시험에서 |
 | `hermes plugins install pullyo/operator-skill/hermes/operator` | 하위 폴더만 받아 스킬(op.py)이 없다. 지금은 `install.sh` 로 설치 |
 
 ## 8. 하지 않는 것 (이 설계 범위 밖)
