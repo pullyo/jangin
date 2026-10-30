@@ -1,88 +1,185 @@
 # operator
 
-**적게 하지만 절대 안 어기는 운영 루프.** AI 에이전트에게 사업·프로젝트 운영(리서치 → 초안 → 발송·게시·배포)을
-맡기되, 밖으로 나가는 건 100% 사람 손을 거치고, 끊겨도 처음부터 하지 않게 만드는 스킬이다.
+**English** · [한국어](README.ko.md)
 
-"AI 직원" 서비스가 Temporal·Modal·승인 큐 같은 인프라로 강제하는 네 가지를
-python3 스크립트 하나와 JSON 파일로 옮겼다. Foundable(foundable.com)의 공개된 운영 방식에서 착안한
-독립 구현이며, 해당 회사와는 무관하다. 기존 "AI 직원" 플러그인들이 지시문으로만 "확인받아라"고 적는 자리를
-**물리적 차단**으로 바꾼 것이 차이다.
+**An operations loop for AI agents that does little, but never breaks its rules.**
+Let your coding agent run the day-to-day of a small business or side project (research → drafts → posting, emailing,
+deploying) while every action that leaves your machine goes through you, and an interrupted run picks up where it stopped.
 
-| 강제 장치 | 구현 | 효과 |
-|---|---|---|
-| 승인 게이트 | `op guard` (PreToolUse 훅) | 발송·게시·배포·결제·삭제 명령 차단 → `pending/` 큐. 승인은 사람 터미널에서만 |
-| 재개 | `op pass` + `state.json` | 단계마다 체크포인트. 세션이 끊겨도 멈춘 단계부터 |
-| 검증 게이트 | `op verify` | 포스트·이메일·리서치·사이트 전부 검사. 실패하면 큐에도 안 올라감 |
-| 모델 라우팅 | `op llm` | 분류·요약은 로컬 모델, 판단·초안은 에이전트 |
-| 실제 게시 | `op deliver` | x·threads·이메일·웹훅. 승인된 티켓만, 토큰은 프로젝트 밖에서 읽음 |
-| 원격 승인 | `op serve`, `op notify` | 휴대폰 브라우저로 승인(1회용 토큰), 대기 건수 알림 |
-| 거절 반영 | `op feedback` | 거절 사유를 모아 다음 초안 전에 읽음 |
+operator is an [Agent Skill](https://agentskills.io) plus a small, dependency-free Python CLI (`op`). The same folder works in
+Claude Code, Codex CLI, Cursor, Gemini CLI and other tools that read the Agent Skills format.
 
-[Agent Skills 표준](https://agentskills.io) 형식이라 Claude Code, Codex CLI, Cursor, Gemini CLI 등에서 같은 폴더를 그대로 쓴다.
+---
 
-## 설치
+## Why
 
-**Claude Code (플러그인, 훅 자동 연결)**
+"AI employee" products are compelling because they don't just *build* things, they keep *running* them. What makes them
+safe is not the model but the machinery around it: approvals, checkpoints, validation. Most agent plugins only *ask* the
+model to "get confirmation first", which works most of the time. operator turns those requests into rules the agent
+cannot get around:
+
+| Without operator | With operator |
+|---|---|
+| "Ask before posting" in a prompt (usually followed) | Posting, emailing, deploying, paying and deleting are **blocked by a hook** and routed to an approval queue |
+| The agent re-reads the chat to guess where it was | Every step is checkpointed in `state.json`; a new session resumes at the exact step |
+| Only code gets tested | Every output is validated (post length, placeholders, banned words, sources, build) before it can even reach the queue |
+| Every call goes to the big model | Classification and summaries can go to a local model; judgment and writing stay with the agent |
+
+It is designed for solo founders and indie developers: small enough to read in one sitting, strict where it matters.
+
+## How it works
 
 ```
+ you ──"run a pass"──▶ agent ──▶ research ──▶ draft ──▶ op verify ──▶ op pending add ──▶ .operator/pending/
+                         │                                   │ fail → fix the draft
+                         │  tries `git push`, `curl -X POST`, `wrangler deploy` …
+                         └──▶ op guard (hook) ──✋ blocked ──▶ "put it in the approval queue"
+
+ you (your own terminal or phone) ──▶ op pending approve 0001 ──▶ .operator/approved/
+ agent ──▶ op send 0001 ──▶ runs exactly the approved action (e.g. op deliver 0001 → posts to X) ──▶ .operator/sent/
+```
+
+Approvals only work from an interactive terminal, so the agent's own shell tool can never approve anything.
+
+## Features
+
+| | Command | What it does |
+|---|---|---|
+| Approval gate | `op guard` (PreToolUse hook) | Blocks outbound and irreversible commands, edits to the queue, and shell tricks that move queue files. Applies to `cd project && …` and `git -C project …` too |
+| Resumable passes | `op pass` | A pass is research → draft → queue → report, with a step limit instead of "credits". Survives crashes and new sessions |
+| Validation gate | `op verify` | Per type rules: posts (channel length), email (to/subject), research (≥3 source URLs), site (build must succeed) |
+| Real delivery | `op deliver` | X, Threads, email (SMTP) and webhooks (Slack/Discord). Only for approved tickets; tokens are read from outside the project |
+| Remote approval | `op serve`, `op notify` | Approve or reject from your phone over your Wi-Fi with a one-time link; get a push with the number of waiting items |
+| Learning from "no" | `op feedback` | Rejection reasons are collected and read before the next draft |
+| Model routing | `op llm` | Sends narrow tasks to a local OpenAI-compatible model (e.g. Ollama), falls back to the agent |
+
+## Quick start (5 minutes)
+
+**1. Install** (pick one)
+
+```text
+# Claude Code — plugin, hook is wired automatically
 /plugin marketplace add pullyo/operator-skill
 /plugin install operator@operator-skill
 ```
 
-**Agent Skills 표준 (Codex, Cursor, Gemini CLI, Copilot 등)**
-
 ```bash
-npx skills add pullyo/operator-skill
-```
-
-**수동 (여러 도구에 한 번에)**
-
-```bash
+# Any tool, by hand: links the skill into ~/.claude, ~/.codex, ~/.cursor, ~/.gemini (whichever exist)
 git clone https://github.com/pullyo/operator-skill
-sh operator-skill/skills/operator/install.sh                 # ~/.claude, ~/.codex, ~/.cursor, ~/.gemini 중 있는 곳에 링크
-sh operator-skill/skills/operator/install.sh --print-hooks   # 도구별 훅 설정 스니펫
+sh operator-skill/skills/operator/install.sh
+sh operator-skill/skills/operator/install.sh --print-hooks   # hook snippets for Claude Code / Codex / Cursor / Gemini CLI
 ```
 
-훅 없이도 스킬은 동작하지만 그땐 차단이 "지시" 수준이다. 훅을 걸면 물리적으로 막힌다.
-도구별 훅 파일 위치와 형식은 [skills/operator/README.md](skills/operator/README.md) 에 있다.
+Without a hook the skill still works, but blocking becomes an instruction instead of a guarantee.
 
-## 사용
+**2. Turn it on for one project**
 
 ```bash
-cd <운영할 프로젝트>
-op init                      # .operator/ 생성. 이 폴더가 있는 프로젝트에서만 가드가 작동한다
-# 에이전트에게: "operator 로 이 아이디어를 plan 해 줘"  → .operator/business.md
-# 에이전트에게: "pass 한 번 돌려"                       → 리서치 → 초안 → 검증 → 승인 대기
-op pending list              # 사람: 승인 대기 확인
-op pending approve 0001      # 사람: 승인, 대화형 터미널에서만 (에이전트는 실행할 수 없다)
-# 에이전트에게: "0001 보내"                              → op send 0001  (티켓에 승인된 action 만 실행)
+alias op="$PWD/operator-skill/skills/operator/scripts/op"   # or put scripts/op on your PATH
+cd ~/my-product && op init                                 # creates .operator/ — the guard only acts where this exists
 ```
 
-`op` 는 `skills/operator/scripts/op` 다. PATH 에 넣거나 전체 경로로 쓴다.
+**3. Talk to your agent** (open a new session in that folder)
 
-## 구조
+> Plan my product with operator. Channels: X and Threads, short and friendly.
+>
+> Run one pass: a launch post for each channel.
+
+**4. Review and approve — yourself**
+
+```bash
+op pending list
+op pending show 0001
+op pending approve 0001          # or: op pending reject 0001 --reason "too stiff"
+op serve --lan                   # optional: approve from your phone instead
+```
+
+**5. Ship it**
+
+> Send 0001.
+
+The agent runs `op send 0001`, which executes only the command you approved. Start with a webhook to a private
+Discord or Slack channel to see the whole loop before connecting real accounts.
+
+## Commands
+
+| Command | Who | Purpose |
+|---|---|---|
+| `op init` · `op status` | anyone | Create the workspace; show the current pass, queue and rejections |
+| `op pass start/next/done/fail/end` | agent | Run and checkpoint a pass |
+| `op verify <file> --type …` | agent | Check a draft before queueing |
+| `op pending add <file> [--action "cmd"]` | agent | Validate and queue a draft (x/threads/email/webhook get `op deliver <id>` automatically) |
+| `op pending list/show` | anyone | Read the queue |
+| `op pending approve <id> [--action "cmd"]` · `reject <id> --reason …` | **you**, interactive terminal | Decide |
+| `op send <id>` | agent | Run the approved action, nothing else |
+| `op serve [--lan]` · `op notify` | **you** / agent | Phone approval page · push the number of waiting items |
+| `op feedback` | agent | Read recent rejection reasons |
+| `op deliver --check` | anyone | Show which channels have tokens (never prints values) |
+| `op guard check [--cwd DIR] "cmd"` | anyone | Would this command be blocked? |
+| `op llm --role summarize …` | agent | Route a narrow task to a local model |
+
+## Safety model
+
+**Enforced** (by the hook and by `op` itself):
+
+- Outbound and irreversible commands are blocked: social API posts, mail, `curl` POST/PUT/DELETE to remote hosts, `git push`
+  (including `git -C … push`), `vercel/netlify/wrangler/fly deploy`, `npm publish`, Stripe charges, domain purchases,
+  recursive deletes, `git push --force`, `DROP TABLE`.
+- The queue (`.operator/pending|approved|sent|rejected`) can only change through `op`. Writing to it with an edit tool or with
+  `mv`/`cp`/`>`/`sed -i`/a Python one-liner is blocked. Read-only commands such as `cat`, `ls` and `grep` are allowed.
+- `op pending approve/reject` and `op serve` refuse to run without an interactive terminal. An agent cannot run them, even
+  from a copied script.
+- `op send` runs only the action recorded on the approved ticket. A different command is refused; a ticket with no action
+  cannot be sent; actions that call `op pending`/`op send` are refused.
+- Domain purchases and payments are never queued: you do those yourself.
+
+**Not covered** — be aware:
+
+- Tools without hooks only get the rules as instructions.
+- Tokens live on the same machine as the agent. The guard blocks outbound requests, but this is not a secret vault: use
+  tokens scoped to posting only.
+- `op serve --lan` is plain HTTP on your local network with a one-time token. Use it on trusted networks (or a private VPN
+  such as Tailscale), never exposed to the internet.
+- The guard reads commands; paths built from variables (`cd $HOME/x`) are judged from the session folder only.
+
+## Limits
+
+- operator does not run by itself. Each pass starts when you (or your OS scheduler) ask for it —
+  see [scheduling](skills/operator/references/scheduling.md).
+- It does not build your brand, website or mailbox, and it does not handle payments.
+- X user tokens expire quickly; operator does not refresh them. See [channels](skills/operator/references/channels.md).
+
+## Repository layout
 
 ```
 operator-skill/
-├── .claude-plugin/   plugin.json, marketplace.json   ← Claude Code 플러그인
-├── .codex-plugin/    plugin.json                     ← Codex 플러그인 메타
-├── hooks/hooks.json                                  ← Claude Code 플러그인 훅 (승인 게이트)
-└── skills/operator/                                  ← 스킬 본체 (Agent Skills 표준)
-    ├── SKILL.md · scripts/op.py · references/ · assets/ · evals/ · install.sh
+├── .claude-plugin/        Claude Code plugin + marketplace manifest
+├── .codex-plugin/         Codex plugin manifest
+├── hooks/hooks.json       Claude Code plugin hook (approval gate)
+├── tests/                 End-to-end tests that drive the real `op` process
+└── skills/operator/       The skill (Agent Skills format)
+    ├── SKILL.md           What the agent reads
+    ├── scripts/op.py      The CLI — Python 3.8+, standard library only
+    ├── references/        Pass flow, guard / validation rules, channels, scheduling, design notes
+    ├── assets/            Draft templates, per-tool hook snippets, launchd template
+    └── install.sh         Multi-tool installer
 ```
 
-채널 토큰 설정은 [skills/operator/references/channels.md](skills/operator/references/channels.md), 매일 돌리기는 [skills/operator/references/scheduling.md](skills/operator/references/scheduling.md).
-
-설계 근거(참고 서비스의 공개 자료 분석)는 [skills/operator/references/foundable-research.md](skills/operator/references/foundable-research.md).
-
-## 테스트
+## Tests
 
 ```bash
 python3 -m unittest discover -s tests
 ```
 
-`tests/test_guard.py` 는 Claude Code·Codex 가 보내는 것과 같은 훅 JSON 을 실제 `op.py guard` 프로세스에 넣어, 세션 폴더·`cd`·`git -C`·파일 경로로 operator 프로젝트를 찾아 막는지 확인한다.
+The tests feed the same hook JSON that Claude Code and Codex send into the real `op` process, and post to a local fake
+X/Threads API to check delivery without touching real accounts.
 
-## 라이선스
+## Background
+
+The design was inspired by how [Foundable](https://foundable.com) describes its AI employee publicly
+(build → run → earn, everything waiting for your OK). operator is an independent implementation and is not affiliated with
+Foundable. Design notes: [references/foundable-research.md](skills/operator/references/foundable-research.md).
+
+## License
 
 MIT
