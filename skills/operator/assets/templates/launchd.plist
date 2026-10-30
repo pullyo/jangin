@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- operator 매일 pass. PROJECT_DIR, AGENT_COMMAND 를 바꾼 뒤 ~/Library/LaunchAgents/ 에 두고 launchctl load. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>local.operator.daily</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string><string>-lc</string>
+    <string>cd "PROJECT_DIR" &amp;&amp; AGENT_COMMAND >> .operator/tmp/schedule.log 2>&amp;1</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+  <key>RunAtLoad</key><false/>
+</dict>
+</plist>

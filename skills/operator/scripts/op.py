@@ -12,12 +12,20 @@ Cursor, Gemini CLI, ...)에서든 같은 명령으로 동작한다. 표준 라�
 
 사용법: op.py <command> [args]   (op.py help 로 전체 목록)
 """
+import html
 import json
+import secrets
+import smtplib
+import ssl
+from email.message import EmailMessage
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlencode, urlsplit
 import os
 import re
 import shlex
 import subprocess
 import sys
+import urllib.error
 import urllib.request
 import warnings
 from datetime import datetime, timezone
@@ -77,6 +85,7 @@ DEFAULT_GUARD = {
     "human_only_commands": [
         r"\bop(\.py)?\s+pending\s+(approve|reject)\b",
         r"\bop(\.py)?\s+(approve|reject)\b",
+        r"\bop(\.py)?\s+(serve|deliver)\b",
     ],
     # 에이전트가 직접 쓰면 안 되는 경로 (Write/Edit/apply_patch). 큐는 op 명령으로만 건드린다.
     "deny_paths": [
@@ -221,6 +230,9 @@ def cmd_status(args):
     for status in ("pending", "approved", "sent", "rejected"):
         n = len([f for f in os.listdir(os.path.join(od, status)) if f.endswith(".md")])
         print(f"{status}: {n}")
+    fb = os.path.join(od, "feedback.md")
+    if os.path.exists(fb):
+        print(f"거절 기록: {open(fb, encoding='utf-8').read().count(chr(10) + '- 2')}건 → 초안 쓰기 전에 `op feedback` 확인")
 
 
 # ---------------------------------------------------------------- pass (상태 머신)
@@ -503,7 +515,7 @@ def cmd_pending(args):
             "id": item_id, "type": vtype, "title": title,
             "channel": opts.get("channel") or meta.get("channel") or "",
             "to": meta.get("to", ""), "subject": meta.get("subject", ""),
-            "action": opts.get("action") or meta.get("action") or "",
+            "action": opts.get("action") or meta.get("action") or (f"op deliver {item_id}" if ticket_channel({"type": vtype, "channel": opts.get("channel") or meta.get("channel")}) else ""),
             "source": os.path.relpath(src, root), "status": "pending", "created": now(),
             "verify": f"passed {len(checks)} checks",
         }
@@ -551,36 +563,333 @@ def cmd_pending(args):
             die(f"op pending {sub} <id> [--note ...] [--action \"<실행할 명령>\"]")
         opts = kv(rest[1:])
         item_id = rest[0]
-        if not (sys.stdin.isatty() and sys.stdout.isatty()) and os.environ.get("OPERATOR_ALLOW_NONINTERACTIVE_APPROVE") != "1":
+        if not human_terminal():
             die("승인/거절은 사람이 대화형 터미널에서만 할 수 있다 (에이전트의 셸 도구에는 터미널이 없다). "
                 "자동화 스크립트에서 꼭 필요하면 OPERATOR_ALLOW_NONINTERACTIVE_APPROVE=1 을 사람이 직접 설정해라.", 7)
-        s, p = find_item(od, item_id, ("pending",))
-        if not p:
-            die(f"pending 에 {item_id} 가 없다.")
-        with open(p, encoding="utf-8") as f:
-            raw = f.read()
-        body, meta = parse_front_matter(raw)
-        new_status = "approved" if sub == "approve" else "rejected"
-        if sub == "approve":
-            if opts.get("action"):
-                meta["action"] = opts["action"]
-            if not (meta.get("action") or "").strip():
-                print(f"참고: {item_id} 에 실행 명령(action)이 없다. 이대로 approve 하면 `op send` 는 거부된다. "
-                      f"`op pending approve {item_id} --action \"<명령>\"` 으로 명령까지 승인해라.")
-        meta["status"] = new_status
-        meta[new_status] = now()
-        if opts.get("note") or opts.get("reason"):
-            meta["note"] = opts.get("note") or opts.get("reason")
-        dst = os.path.join(od, new_status, os.path.basename(p))
-        with open(dst, "w", encoding="utf-8") as f:
-            f.write("---\n" + "\n".join(f"{k}: {v}" for k, v in meta.items()) + "\n---\n\n" + body)
-        os.remove(p)
-        print(f"{item_id} → {new_status}")
-        if new_status == "approved":
-            act = meta.get("action")
-            print("다음: 에이전트가 `op send " + item_id + " -- <명령>` 으로 실제 발송/게시/배포한다." + (f"\n  기록된 action: {act}" if act else ""))
+        try:
+            meta = set_status(od, item_id, "approved" if sub == "approve" else "rejected",
+                              note=opts.get("note") or opts.get("reason"), action=opts.get("action"))
+        except ValueError as e:
+            die(str(e))
+        print(f"{item_id} → {meta['status']}")
+        if meta["status"] == "approved":
+            if (meta.get("action") or "").strip():
+                print(f"다음: 에이전트가 `op send {item_id}` 로 승인된 action 을 실행한다.\n  action: {meta['action']}")
+            else:
+                print(f"참고: action 이 없어 `op send` 는 거부된다. `op pending approve` 는 끝났으니 새 티켓으로 다시 올리거나 "
+                      f"다음에는 `--action \"<명령>\"` 을 붙여 승인해라.")
+        else:
+            print("거절 사유는 .operator/feedback.md 에 남아 다음 초안 작성 때 반영된다.")
         return
     die(f"모르는 하위 명령: pending {sub}")
+
+
+def human_terminal():
+    return (sys.stdin.isatty() and sys.stdout.isatty()) or os.environ.get("OPERATOR_ALLOW_NONINTERACTIVE_APPROVE") == "1"
+
+
+def set_status(od, item_id, new_status, note=None, action=None):
+    """pending 티켓을 approved/rejected 로 옮긴다. 호출자가 사람임을 이미 확인했다고 가정한다."""
+    if new_status not in ("approved", "rejected"):
+        raise ValueError("상태는 approved 또는 rejected")
+    _, p = find_item(od, item_id, ("pending",))
+    if not p:
+        raise ValueError(f"pending 에 {item_id} 가 없다.")
+    with open(p, encoding="utf-8") as f:
+        body, meta = parse_front_matter(f.read())
+    if new_status == "approved" and action:
+        if re.search(r"\bop(?:\.py)?\s+(?:pending|send|serve)\b", action):
+            raise ValueError("action 에 op 의 큐 명령을 넣을 수 없다.")
+        meta["action"] = action
+    meta["status"] = new_status
+    meta[new_status] = now()
+    if note:
+        meta["note"] = " ".join(str(note).split())
+    dst = os.path.join(od, new_status, os.path.basename(p))
+    with open(dst, "w", encoding="utf-8") as f:
+        f.write("---\n" + "\n".join(f"{k}: {v}" for k, v in meta.items()) + "\n---\n\n" + body)
+    os.remove(p)
+    if new_status == "rejected":
+        record_feedback(od, meta, body, note)
+    return meta
+
+
+# ---------------------------------------------------------------- feedback (거절 사유를 다음 초안에 반영)
+def record_feedback(od, meta, body, reason):
+    path = os.path.join(od, "feedback.md")
+    new = not os.path.exists(path)
+    excerpt = " ".join(body.split())[:120]
+    with open(path, "a", encoding="utf-8") as f:
+        if new:
+            f.write("# 거절 기록\n\n다음 초안을 쓰기 전에 읽는다. 같은 이유로 다시 거절되지 않게 한다. 사람이 직접 고쳐도 된다.\n\n")
+        f.write(f"- {now()[:10]} · {meta.get('type', '?')}" + (f"/{meta['channel']}" if meta.get("channel") else "")
+                + f" · {meta.get('id', '')} {meta.get('title', '')}\n  - 사유: {' '.join(str(reason or '사유 없음').split())}\n  - 초안: {excerpt}\n")
+
+
+def cmd_feedback(args):
+    opts = kv(args)
+    od = op_dir()
+    path = os.path.join(od, "feedback.md")
+    if not os.path.exists(path):
+        print("거절 기록 없음")
+        return
+    entries = re.split(r"\n(?=- \d{4}-)", open(path, encoding="utf-8").read())
+    head, items = entries[0], entries[1:]
+    n = int(opts.get("last") or 10)
+    print(f"최근 거절 {min(n, len(items))}/{len(items)}건 (.operator/feedback.md)")
+    for e in items[-n:]:
+        print(e.strip())
+
+
+# ---------------------------------------------------------------- deliver (승인된 티켓을 실제 채널로 보냄)
+# 토큰은 환경 변수나 프로젝트 밖 ~/.config/operator/env 에서만 읽는다. 티켓·로그에는 절대 쓰지 않는다.
+CHANNELS = {
+    "x": {"env": ["X_USER_ACCESS_TOKEN"], "doc": "X API v2 사용자 토큰 (OAuth 2.0, tweet.write)"},
+    "threads": {"env": ["THREADS_USER_ID", "THREADS_ACCESS_TOKEN"], "doc": "Threads API 사용자 ID 와 토큰 (threads_content_publish)"},
+    "email": {"env": ["SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM"], "doc": "SMTP (STARTTLS 587 기본, SMTP_PORT 로 변경)"},
+    "webhook": {"env": ["OPERATOR_WEBHOOK_URL"], "doc": "Slack/Discord 등 수신 웹훅 URL"},
+}
+
+
+def channel_env():
+    env = dict(os.environ)
+    path = os.path.expanduser("~/.config/operator/env")
+    if os.path.isfile(path):
+        for line in open(path, encoding="utf-8"):
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                env.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+    return env
+
+
+def _http(method, url, data=None, headers=None, timeout=30):
+    req = urllib.request.Request(url, data=data, method=method, headers=headers or {})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            text = resp.read().decode("utf-8", "replace")
+            return resp.status, text
+    except urllib.error.HTTPError as e:
+        return e.code, e.read().decode("utf-8", "replace")
+
+
+def ticket_channel(meta):
+    t = meta.get("type")
+    if t == "email":
+        return "email"
+    ch = (meta.get("channel") or "").lower()
+    return ch if ch in CHANNELS else None
+
+
+def deliver_ticket(meta, body, env, dry_run=False):
+    """(ok, 요약). 요약에는 토큰을 넣지 않는다."""
+    ch = ticket_channel(meta)
+    if not ch:
+        return False, f"지원하지 않는 채널: type={meta.get('type')} channel={meta.get('channel')}"
+    missing = [k for k in CHANNELS[ch]["env"] if not env.get(k)]
+    if missing:
+        return False, f"{ch}: 환경 변수 없음 {missing} ({CHANNELS[ch]['doc']})"
+    text = body.strip()
+    if dry_run:
+        return True, f"[dry-run] {ch} 로 보낼 내용 {len(text)}자" + (f", 받는 사람 {meta.get('to')}" if ch == "email" else "")
+    if ch == "x":
+        status, resp = _http("POST", env.get("OPERATOR_X_API", "https://api.x.com") + "/2/tweets", json.dumps({"text": text}).encode(),
+                             {"Authorization": "Bearer " + env["X_USER_ACCESS_TOKEN"], "Content-Type": "application/json"})
+        if status in (200, 201):
+            tid = (json.loads(resp).get("data") or {}).get("id", "")
+            return True, f"x 게시 완료 id={tid}"
+        return False, f"x 실패 HTTP {status}: {resp[:200]}"
+    if ch == "threads":
+        base = env.get("OPERATOR_THREADS_API", "https://graph.threads.net") + "/v1.0/" + env["THREADS_USER_ID"]
+        tok = env["THREADS_ACCESS_TOKEN"]
+        status, resp = _http("POST", base + "/threads", urlencode({"media_type": "TEXT", "text": text, "access_token": tok}).encode(),
+                             {"Content-Type": "application/x-www-form-urlencoded"})
+        if status != 200:
+            return False, f"threads 컨테이너 실패 HTTP {status}: {resp[:200]}"
+        cid = json.loads(resp).get("id")
+        status, resp = _http("POST", base + "/threads_publish", urlencode({"creation_id": cid, "access_token": tok}).encode(),
+                             {"Content-Type": "application/x-www-form-urlencoded"})
+        if status == 200:
+            return True, f"threads 게시 완료 id={json.loads(resp).get('id', '')}"
+        return False, f"threads 게시 실패 HTTP {status}: {resp[:200]}"
+    if ch == "email":
+        if not meta.get("to") or not meta.get("subject"):
+            return False, "email: to/subject 헤더가 없다"
+        msg = EmailMessage()
+        msg["From"], msg["To"], msg["Subject"] = env["SMTP_FROM"], meta["to"], meta["subject"]
+        msg.set_content(text)
+        port = int(env.get("SMTP_PORT") or 587)
+        try:
+            if port == 465:
+                srv = smtplib.SMTP_SSL(env["SMTP_HOST"], port, context=ssl.create_default_context(), timeout=30)
+            else:
+                srv = smtplib.SMTP(env["SMTP_HOST"], port, timeout=30)
+                srv.starttls(context=ssl.create_default_context())
+            with srv:
+                srv.login(env["SMTP_USER"], env["SMTP_PASSWORD"])
+                srv.send_message(msg)
+        except (OSError, smtplib.SMTPException) as e:
+            return False, f"email 실패: {e.__class__.__name__}"
+        return True, f"email 발송 완료 → {meta['to']}"
+    if ch == "webhook":
+        status, resp = _http("POST", env["OPERATOR_WEBHOOK_URL"], json.dumps({"text": text, "content": text}).encode(),
+                             {"Content-Type": "application/json"})
+        return (200 <= status < 300), f"webhook HTTP {status}"
+    return False, "알 수 없는 채널"
+
+
+def cmd_deliver(args):
+    """op send 가 승인된 action 으로만 부른다. 직접 실행은 가드가 막고, 여기서도 send 가 넘긴 표시를 확인한다."""
+    opts = kv(args)
+    od = op_dir()
+    if opts.get("check"):
+        env = channel_env()
+        for ch, spec in CHANNELS.items():
+            missing = [k for k in spec["env"] if not env.get(k)]
+            print(f"  {ch:8s} {'준비됨' if not missing else '없음: ' + ', '.join(missing)}   ({spec['doc']})")
+        return
+    ids = opts.get("_") or []
+    if len(ids) != 1:
+        die("op deliver <id>   (op send 가 승인된 action 으로 실행)   |   op deliver --check")
+    item_id = ids[0]
+    if os.environ.get("OPERATOR_SEND_TICKET") != item_id:
+        die("op deliver 는 `op send <id>` 를 통해서만 실행된다.", 6)
+    _, p = find_item(od, item_id, ("approved",))
+    if not p:
+        die(f"{item_id} 는 approved 상태가 아니다.", 5)
+    with open(p, encoding="utf-8") as f:
+        body, meta = parse_front_matter(f.read())
+    ok, summary = deliver_ticket(meta, body, channel_env(), dry_run=bool(opts.get("dry-run")))
+    print(summary)
+    sys.exit(0 if ok else 1)
+
+
+# ---------------------------------------------------------------- serve / notify (휴대폰에서 승인)
+def cmd_notify(args):
+    """승인 대기 건수만 ntfy 로 알린다 (본문은 보내지 않음). OPERATOR_NTFY_TOPIC 이 없으면 조용히 넘어간다."""
+    od = op_dir()
+    topic = channel_env().get("OPERATOR_NTFY_TOPIC")
+    n = len([f for f in os.listdir(os.path.join(od, "pending")) if f.endswith(".md")])
+    if not topic:
+        print(f"승인 대기 {n}건 (OPERATOR_NTFY_TOPIC 이 없어 알림은 보내지 않음)")
+        return
+    server = channel_env().get("OPERATOR_NTFY_SERVER", "https://ntfy.sh").rstrip("/")
+    project = config(od).get("project") or os.path.basename(os.path.dirname(od))
+    status, _ = _http("POST", f"{server}/{topic}", f"{project}: 승인 대기 {n}건".encode("utf-8"),
+                      {"Title": "operator", "Tags": "inbox_tray"}, timeout=10)
+    print(f"알림 {'보냄' if 200 <= status < 300 else '실패 HTTP ' + str(status)}: 승인 대기 {n}건")
+
+
+def _page(title, inner):
+    return ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
+            f"<title>{html.escape(title)}</title><style>body{{font:16px/1.5 -apple-system,system-ui,sans-serif;margin:0 auto;max-width:640px;padding:16px;background:#faf7f2;color:#222}}"
+            "article{background:#fff;border:1px solid #e5ded3;border-radius:12px;padding:14px;margin:12px 0}pre{white-space:pre-wrap;word-break:break-word;background:#f4efe7;padding:10px;border-radius:8px}"
+            "button{font-size:16px;padding:10px 16px;border-radius:8px;border:0;margin-right:8px}.ok{background:#2f7d4f;color:#fff}.no{background:#b34422;color:#fff}"
+            "input{font-size:16px;padding:8px;width:100%;box-sizing:border-box;margin:6px 0}small{color:#777}</style>"
+            f"<h1>{html.escape(title)}</h1>{inner}")
+
+
+def cmd_serve(args):
+    """승인 대기 목록을 웹 페이지로 보여 주고 사람이 승인·거절한다. 대화형 터미널에서만 시작되고,
+    주소에 들어 있는 1회용 토큰이 있어야 접근된다. 에이전트는 이 명령을 실행할 수 없다."""
+    opts = kv(args)
+    od = op_dir()
+    if not human_terminal():
+        die("op serve 는 사람이 대화형 터미널에서만 시작할 수 있다.", 7)
+    token = secrets.token_urlsafe(24)
+    host = "0.0.0.0" if opts.get("lan") else "127.0.0.1"
+    port = int(opts.get("port") or 8765)
+
+    def items():
+        out = []
+        for f in sorted(os.listdir(os.path.join(od, "pending"))):
+            if f.endswith(".md"):
+                body, meta = parse_front_matter(open(os.path.join(od, "pending", f), encoding="utf-8").read())
+                out.append((meta, body))
+        return out
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def _send(self, code, text):
+            data = text.encode("utf-8")
+            self.send_response(code)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'")
+            self.end_headers()
+            self.wfile.write(data)
+
+        def _authorized(self, given):
+            return isinstance(given, str) and secrets.compare_digest(given, token)
+
+        def do_GET(self):
+            q = parse_qs(urlsplit(self.path).query)
+            if not self._authorized((q.get("t") or [""])[0]):
+                return self._send(403, _page("operator", "<p>주소의 토큰이 맞지 않는다.</p>"))
+            cards = []
+            for meta, body in items():
+                i = html.escape(meta.get("id", ""))
+                act = (meta.get("action") or "").strip()
+                cards.append(
+                    f"<article><b>{i} · {html.escape(meta.get('type', ''))}"
+                    + (f" / {html.escape(meta['channel'])}" if meta.get("channel") else "")
+                    + (f" → {html.escape(meta['to'])}" if meta.get("to") else "")
+                    + f"</b><div>{html.escape(meta.get('title', ''))}</div><pre>{html.escape(body.strip())}</pre>"
+                    + f"<small>실행될 명령: {html.escape(act) if act else '없음 (승인해도 보낼 수 없음, 터미널에서 --action 지정)'}</small>"
+                    + f"<form method=post action='/decide'><input type=hidden name=t value='{html.escape(token)}'><input type=hidden name=id value='{i}'>"
+                    + "<input name=reason placeholder='거절 사유 (거절 시)'>"
+                    + ("<button class=ok name=d value=approve>승인</button>" if act else "")
+                    + "<button class=no name=d value=reject>거절</button></form></article>")
+            self._send(200, _page(f"승인 대기 {len(cards)}건", "".join(cards) or "<p>대기 중인 항목이 없다.</p>"))
+
+        def do_POST(self):
+            n = int(self.headers.get("Content-Length") or 0)
+            if n > 20000:
+                return self._send(413, _page("operator", "<p>요청이 너무 크다.</p>"))
+            form = parse_qs(self.rfile.read(n).decode("utf-8"))
+            get = lambda k: (form.get(k) or [""])[0]
+            if not self._authorized(get("t")):
+                return self._send(403, _page("operator", "<p>토큰이 맞지 않는다.</p>"))
+            d, item_id = get("d"), get("id")
+            if d not in ("approve", "reject") or not re.fullmatch(r"\d{4}", item_id):
+                return self._send(400, _page("operator", "<p>잘못된 요청</p>"))
+            try:
+                meta = set_status(od, item_id, "approved" if d == "approve" else "rejected", note=get("reason") or None)
+                msg = f"{item_id} → {meta['status']}"
+            except ValueError as e:
+                msg = str(e)
+            print(f"[serve] {msg}", flush=True)
+            back = f"/?t={token}"
+            self._send(200, _page("operator", f"<p>{html.escape(msg)}</p><p><a href='{html.escape(back)}'>목록으로</a></p>"))
+
+    srv = ThreadingHTTPServer((host, port), Handler)
+    port = srv.server_address[1]
+    shown = "127.0.0.1" if host == "127.0.0.1" else _lan_ip()
+    print(f"승인 페이지: http://{shown}:{port}/?t={token}", flush=True)
+    if host != "127.0.0.1":
+        print("같은 Wi-Fi 의 휴대폰에서 위 주소를 연다. HTTPS 가 아니므로 공용 네트워크에서는 쓰지 마라.")
+    print("Ctrl+C 로 종료. 토큰은 이 실행에서만 유효하다.", flush=True)
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        srv.server_close()
+
+
+def _lan_ip():
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("10.255.255.255", 1))
+        return s.getsockname()[0]
+    except OSError:
+        return "127.0.0.1"
+    finally:
+        s.close()
 
 
 # ---------------------------------------------------------------- send (승인된 티켓으로만 밖으로)
@@ -611,10 +920,16 @@ def cmd_send(args):
             die(f"보내려는 명령이 승인된 action 과 다르다.\n  승인: {action}\n  요청: {given}\n명령을 바꾸려면 새 티켓을 올려 다시 승인받아라.", 6)
     # 승인된 action 그대로 실행한다. 인용이 필요한 명령이라 셸로 넘긴다.
     cmd_str, use_shell = action, True
-    if re.search(r"\bop(?:\.py)?\s+(?:pending|send)\b", action):
+    if re.search(r"\bop(?:\.py)?\s+(?:pending|send|serve)\b", action):
         die("action 안에서 op 의 큐 명령을 실행할 수 없다.", 6)
     print(f"[send {item_id}] {cmd_str}")
-    r = subprocess.run(cmd_str, shell=True, cwd=root)
+    child_env = {**os.environ, "OPERATOR_SEND_TICKET": item_id}
+    own = re.match(r"^\s*op(?:\.py)?\s+(.*)$", cmd_str)
+    if own:
+        # `op …` 는 PATH·별칭과 상관없이 이 스크립트 자신으로 실행한다 (셸 별칭은 하위 셸에 없다).
+        r = subprocess.run([sys.executable, "-I", os.path.abspath(__file__), *shlex.split(own.group(1))], cwd=root, env=child_env)
+    else:
+        r = subprocess.run(cmd_str, shell=True, cwd=root, env=child_env)
     meta["executed"] = now()
     meta["command"] = cmd_str
     meta["exit"] = str(r.returncode)
@@ -711,7 +1026,7 @@ _QUEUE_DIRS = ("pending", "approved", "sent", "rejected")
 
 def touches_queue(cmd, od, base):
     """셸 명령이 이 프로젝트의 승인 큐 경로를 언급하면 그 상대 경로를 돌려준다."""
-    if re.search(r"\bop(?:\.py)?\s+(?:pending|send|status|pass|verify|init|guard|llm)\b", cmd) and not re.search(r"[;&|]", cmd):
+    if re.search(r"\bop(?:\.py)?\s+(?:pending|send|status|pass|verify|init|guard|llm|feedback|notify)\b", cmd) and not re.search(r"[;&|]", cmd):
         return None  # op 명령 한 줄 — 큐 처리는 op 자신이 규칙대로 한다
     root = os.path.dirname(od)
     names = "|".join(_QUEUE_DIRS)
@@ -854,6 +1169,7 @@ def cmd_llm(args):
 COMMANDS = {
     "init": cmd_init, "status": cmd_status, "pass": cmd_pass, "verify": cmd_verify,
     "pending": cmd_pending, "send": cmd_send, "guard": cmd_guard, "llm": cmd_llm,
+    "deliver": cmd_deliver, "serve": cmd_serve, "notify": cmd_notify, "feedback": cmd_feedback,
 }
 
 
@@ -873,6 +1189,11 @@ def main():
   guard [--format claude|codex|cursor|gemini]   (훅: stdin 으로 JSON)
   guard check [--cwd DIR] "<command>"     이 명령이 막히는지 확인
   llm --role classify|summarize|tag|extract [--input f] "프롬프트"
+  deliver --check                         채널(x/threads/email/webhook) 토큰 준비 상태 (값은 출력 안 함)
+  deliver <id>                            op send 가 승인된 action 으로만 실행 (직접 실행 불가)
+  serve [--lan] [--port 8765]             휴대폰·브라우저 승인 페이지 (사람만, 대화형 터미널)
+  notify                                  승인 대기 건수를 ntfy 로 알림 (OPERATOR_NTFY_TOPIC)
+  feedback [--last N]                     거절 기록 보기 (다음 초안 전에)
 """)
         return
     fn = COMMANDS.get(sys.argv[1])

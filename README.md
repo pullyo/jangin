@@ -14,6 +14,9 @@ python3 스크립트 하나와 JSON 파일로 옮겼다. Foundable(foundable.com
 | 재개 | `op pass` + `state.json` | 단계마다 체크포인트. 세션이 끊겨도 멈춘 단계부터 |
 | 검증 게이트 | `op verify` | 포스트·이메일·리서치·사이트 전부 검사. 실패하면 큐에도 안 올라감 |
 | 모델 라우팅 | `op llm` | 분류·요약은 로컬 모델, 판단·초안은 에이전트 |
+| 실제 게시 | `op deliver` | x·threads·이메일·웹훅. 승인된 티켓만, 토큰은 프로젝트 밖에서 읽음 |
+| 원격 승인 | `op serve`, `op notify` | 휴대폰 브라우저로 승인(1회용 토큰), 대기 건수 알림 |
+| 거절 반영 | `op feedback` | 거절 사유를 모아 다음 초안 전에 읽음 |
 
 [Agent Skills 표준](https://agentskills.io) 형식이라 Claude Code, Codex CLI, Cursor, Gemini CLI 등에서 같은 폴더를 그대로 쓴다.
 
@@ -67,6 +70,8 @@ operator-skill/
 └── skills/operator/                                  ← 스킬 본체 (Agent Skills 표준)
     ├── SKILL.md · scripts/op.py · references/ · assets/ · evals/ · install.sh
 ```
+
+채널 토큰 설정은 [skills/operator/references/channels.md](skills/operator/references/channels.md), 매일 돌리기는 [skills/operator/references/scheduling.md](skills/operator/references/scheduling.md).
 
 설계 근거(참고 서비스의 공개 자료 분석)는 [skills/operator/references/foundable-research.md](skills/operator/references/foundable-research.md).
 

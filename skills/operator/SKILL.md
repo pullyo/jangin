@@ -15,7 +15,7 @@ compatibility: >-
   물리적 차단은 PreToolUse 류 훅을 지원하는 도구(Claude Code, Codex, Cursor, Gemini CLI)에서만 100%.
 metadata:
   author: plant313
-  version: "0.3.0"
+  version: "0.4.0"
 ---
 
 # operator — 적게 하지만 절대 안 어기는 운영 루프
@@ -83,12 +83,15 @@ op pass done report  ;  op pass end                             # passes/<id>.md
 단계별로 할 일:
 - **research**: 시장·경쟁사·트렌드를 `.operator/research/<날짜>-<주제>.md` 에. 출처 URL 3개 이상 (검증 규칙).
   웹 검색 도구가 있으면 써라. 없으면 아는 범위에서 쓰되 "출처 부족"을 명시하고 `op pass fail research --reason` 로 기록.
-- **draft**: 포스트·이메일 초안을 `.operator/drafts/` 에 한 파일씩. 형식은 아래 §4. business.md 의 톤·CTA·금지어를 따른다.
+- **draft**: 먼저 `op feedback` 으로 최근 거절 사유를 읽고 같은 이유로 거절되지 않게 쓴다. 포스트·이메일 초안을
+  `.operator/drafts/` 에 한 파일씩. 형식은 아래 §4. business.md 의 톤·CTA·금지어를 따른다.
 - **queue**: 초안마다 `op pending add`. 검증을 통과한 것만 올라간다. 실패하면 **초안을 고쳐라**. 규칙을 완화하려고
   config.json 을 건드리지 마라 (그건 사용자 결정). 예외는 비어 있는 값을 채우는 것뿐이다 (예: `verify.site.command`).
-  실제로 보낼 명령은 `--action` 으로 반드시 적어 둬라. 사람은 그 명령을 보고 승인하고, 승인 뒤에는 **그 명령만** 실행된다.
-  action 이 없는 티켓은 사람이 approve 할 때 `--action` 으로 명령을 정해 줘야 보낼 수 있다.
+  x·threads·webhook 포스트와 이메일은 action 이 `op deliver <id>` 로 자동으로 채워진다(실제 게시는 그 명령이 한다,
+  [references/channels.md](references/channels.md)). 그 밖의 채널은 보낼 명령을 `--action` 으로 반드시 적어 둬라.
+  사람은 그 명령을 보고 승인하고, 승인 뒤에는 **그 명령만** 실행된다.
 - **report**: `op pass end` 가 만드는 요약에 더해, 사용자에게 **승인 대기 목록**과 다음 pass 제안을 3줄로.
+  `op notify` 로 휴대폰에 대기 건수를 알린다(설정이 없으면 조용히 넘어감).
 
 규칙:
 - `--max-steps` 는 원형 서비스의 크레딧 상한에 해당한다. 상한에 닿으면 `op pass end` 하고 멈춘다. 더 하고 싶으면 사용자가 새 pass 를 시킨다.
@@ -116,6 +119,9 @@ op pending approve 0003                                   # 티켓의 action 그
 op pending approve 0004 --action "npm run build && wrangler deploy"   # action 이 없거나 바꿀 때
 op pending reject 0003 --reason "톤이 딱딱함"
 ```
+
+휴대폰으로 승인하고 싶다면 사용자가 자기 터미널에서 `op serve --lan` 을 실행해 같은 Wi-Fi 에서 연다
+(1회용 토큰 주소, 너는 실행할 수 없다). 거절 사유는 `.operator/feedback.md` 에 쌓여 다음 초안에 반영된다.
 
 승인된 티켓은 `op send <id>` 로 실제 발송·게시·배포한다. 실행되는 것은 티켓에 승인된 action 뿐이다.
 `op send <id> -- <명령>` 처럼 명령을 같이 주면 action 과 같을 때만 실행되고, 다르면 거부된다. 다른 명령을
@@ -191,7 +197,12 @@ op llm --role draft "..."    # → ROUTE=self, exit 3. 네가 직접 써라.
 `ROUTE=self` 가 나오면 네가 한다. 로컬 모델이 없어도 아무것도 깨지지 않는다. 설정: `config.json` `routing`.
 배경: [references/model-routing.md](references/model-routing.md)
 
-## 6. 이 설계의 근거
+## 6. 매일 돌리기
+
+혼자 돌지 않는다. 매일 돌리려면 운영체제 예약(launchd·cron·작업 스케줄러)으로 에이전트를 비대화형으로 한 번 실행한다.
+예약 실행도 승인 큐까지만 가고 승인은 사람이 한다. 설정: [references/scheduling.md](references/scheduling.md)
+
+## 7. 이 설계의 근거
 
 왜 이렇게 만들었는지, 참고한 서비스가 실제로 어떻게 돌아가는지, 유사 프로젝트와의 차이는
 [references/foundable-research.md](references/foundable-research.md) 에 있다. 설계를 바꾸고 싶을 때 먼저 읽어라.

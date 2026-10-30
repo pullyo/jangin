@@ -29,7 +29,8 @@
 
 ## 사람 전용 명령 (`human_only_commands`)
 
-`op pending approve`, `op pending reject`, `op approve`, `op reject`. 에이전트 세션에선 훅이 막는다.
+`op pending approve`, `op pending reject`, `op approve`, `op reject`, `op serve`, `op deliver`. 에이전트 세션에선 훅이 막는다.
+`op deliver` 는 `op send` 가 승인된 action 으로 실행할 때만 동작한다(직접 실행하면 거부).
 사람은 훅이 없는 자기 터미널에서 실행한다. Claude 데스크톱 앱이라면 Terminal 패널.
 훅과 별개로 approve/reject 명령 자체가 **대화형 터미널(TTY)** 을 요구한다. 에이전트의 셸 도구에는 터미널이 없어
 스크립트를 복사해 돌려도 거부된다. 자동화에서 꼭 필요하면 사람이 `OPERATOR_ALLOW_NONINTERACTIVE_APPROVE=1` 을 직접 설정한다.

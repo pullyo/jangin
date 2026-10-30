@@ -1,7 +1,7 @@
 {
   "name": "operator",
   "description": "적게 하지만 절대 안 어기는 운영 루프. 승인 게이트(훅으로 발송·게시·배포·결제·삭제 차단), 재개 가능한 pass, 모든 산출물 검증 게이트, 로컬 모델 라우팅. \"AI 직원\" 서비스의 운영 방식을 1인 개발자용으로 축소.",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "author": { "name": "pullyo", "url": "https://github.com/pullyo" },
   "homepage": "https://github.com/pullyo/operator-skill",
   "repository": "https://github.com/pullyo/operator-skill",
