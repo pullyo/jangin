@@ -84,7 +84,7 @@ if [ "$COMMAND" = 1 ] && [ -n "$CMD_PROFILE" ] && command -v hermes >/dev/null 2
   cat > "$BIN_DIR/operator" <<WRAP
 #!/bin/sh
 # operator — Operator(Hermes 배포판) 명령. operator-skill 의 install.sh 가 만들었다.
-#   operator setup            한국어 operator 설정 마법사
+#   operator setup            Hermes 기본 설정 → operator 단계 (Hermes 마법사와 같은 화면)
 #   operator setup --hermes   원래 Hermes 설정 마법사만
 #   operator setup --operator-only   Hermes 기본 설정을 건너뛰고 operator 단계만
 #   operator setup model 등   Hermes 설정의 한 단계
@@ -96,7 +96,7 @@ fi
 exec "$HERMES_BIN" -p "$CMD_PROFILE" "\$@"
 WRAP
   chmod +x "$BIN_DIR/operator"
-  echo "  + 명령:     $BIN_DIR/operator  (operator setup = 한국어 마법사)"
+  echo "  + 명령:     $BIN_DIR/operator  (operator setup = Operator 설정 마법사)"
 fi
 
 cat <<MSG

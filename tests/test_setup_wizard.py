@@ -51,42 +51,71 @@ class FakeHermes:
         self.state['hooks'].append(cmd)
 
 
+class FakeUI:
+    """Hermes 화면 부품 대신. answers 를 순서대로 쓰고, '' 는 기본값(엔터)."""
+    def __init__(self, answers):
+        self.answers, self.out = list(answers), []
+
+    def _next(self):
+        return self.answers.pop(0)
+
+    def banner(self, *lines): self.out.extend(lines)
+    def header(self, t): self.out.append('◆ ' + t)
+    def info(self, *lines): self.out.extend(l for l in lines if l)
+    def success(self, t): self.out.append('✓ ' + t)
+    def warn(self, t): self.out.append('! ' + t)
+
+    def ask(self, q, default=None):
+        a = self._next()
+        return a if a != '' else (default or '')
+
+    def choose(self, q, options, default=0, description=None):
+        a = self._next()
+        return default if a == '' else int(a)
+
+    def yes(self, q, default=True, description=None):
+        a = self._next()
+        return default if a == '' else a == 'y'
+
+    def run_steps(self, steps):
+        for _, fn in steps:
+            fn()
+
+
 class WizardTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix='op wizard 한글 ')
         self.home = os.path.join(self.tmp.name, 'hermes-home')
-        self.out = []
+        self.folder = os.path.join(self.tmp.name, 'projects')
 
     def tearDown(self):
         self.tmp.cleanup()
 
     def run_wizard(self, fake, answers, run_hermes=True):
-        it = iter(answers)
-        w = sw.Wizard(fake, self.home, ask=lambda q: next(it), say=self.out.append, run_hermes=run_hermes)
-        code = w.run()
+        self.ui = FakeUI(answers)
+        code = sw.OperatorSetup(self.ui, fake, self.home, run_hermes=run_hermes).run()
+        self.assertEqual(self.ui.answers, [], '답이 남았다 = 질문 수가 예상과 다르다')
         return code, json.loads(Path(sw.settings_path(self.home)).read_text(encoding='utf-8'))
 
     def test_defaults_run_the_full_hermes_wizard_first_then_operator_steps(self):
         fake = FakeHermes()
-        folder = os.path.join(self.tmp.name, 'projects')
-        # Hermes 기본 설정 진행 엔터(Y) · 폴더 · 승인 방식 엔터 · 셸 훅 엔터(Y)
-        code, s = self.run_wizard(fake, ['', folder, '', ''])
+        # Hermes 기본 설정 진행(엔터) · 폴더 · 승인 방식(엔터) · 셸 훅(엔터)
+        code, s = self.run_wizard(fake, ['', self.folder, '', ''])
         self.assertEqual(code, 0)
-        self.assertEqual(fake.calls[0], ('setup', None))     # 원래 Hermes 마법사 전체가 먼저
-        self.assertEqual(s['folder'], folder)
-        self.assertTrue(os.path.isdir(folder))
-        self.assertEqual(s['human_via'], ['local', 'messenger'])
+        self.assertEqual(fake.calls[0], ('setup', None))
         self.assertEqual([c[0] for c in fake.calls], ['setup', 'hook'])
         self.assertIn('guard --format hermes', fake.calls[1][1])
-        text = '\n'.join(self.out)
-        self.assertIn('[1/6] Hermes 기본 설정', text)
-        self.assertIn('[6/6] 두 번째 잠금', text)
-        self.assertIn('/idea', text)
+        self.assertEqual(s['folder'], self.folder)
+        self.assertTrue(os.path.isdir(self.folder))
+        self.assertEqual(s['human_via'], ['local', 'messenger'])
+        for h in ('◆ operator 플러그인', '◆ 프로젝트 폴더', '◆ 승인 방식', '◆ 메신저 승인', '◆ 두 번째 잠금 (셸 훅)', '◆ Operator 설정 완료'):
+            self.assertIn(h, self.ui.out)
+        self.assertTrue(any('☤ Operator Setup' in l for l in self.ui.out))
 
-    def test_strict_mode_offers_messenger_and_narrows_operator_users(self):
+    def test_strict_mode_opens_messenger_setup_and_narrows_operator_users(self):
         fake = FakeHermes()
-        # Hermes 기본 설정 n · 폴더 · 승인 방식 2(메신저만) · 지금 연결할까요 엔터(Y) · 사용자 ID 엔터(=텔레그램 허용 사용자) · 셸 훅 n
-        code, s = self.run_wizard(fake, ['n', os.path.join(self.tmp.name, 'p'), '2', '', '', 'n'])
+        # Hermes 건너뜀 · 폴더 · 메신저만(1) · 메신저 설정 열기(엔터) · 허용 사용자(엔터 = 텔레그램 허용 사용자) · 셸 훅 n
+        code, s = self.run_wizard(fake, ['n', self.folder, '1', '', '', 'n'])
         self.assertEqual(s['human_via'], ['messenger'])
         self.assertIn(('setup', 'gateway'), fake.calls)
         self.assertIn(('env', 'OPERATOR_ALLOWED_USERS', '424242'), fake.calls)
@@ -94,27 +123,26 @@ class WizardTests(unittest.TestCase):
 
     def test_no_login_runs_the_hermes_wizard_without_asking_and_enables_plugin(self):
         fake = FakeHermes(provider=None, plugins=[])
-        code, s = self.run_wizard(fake, [os.path.join(self.tmp.name, 'p'), '1', 'n'])
+        self.run_wizard(fake, [self.folder, '', 'n'])
         self.assertEqual(fake.calls[0], ('setup', None))
         self.assertIn(('enable',), fake.calls)
 
-    def test_bad_answers_are_asked_again(self):
-        fake = FakeHermes()
-        code, s = self.run_wizard(fake, ['음', 'n', os.path.join(self.tmp.name, 'p'), '9', '1', 'n'])
-        self.assertEqual(s['human_via'], ['local', 'messenger'])
-        self.assertIn('y 또는 n 으로 답해 주세요.', '\n'.join(self.out))
-
     def test_existing_hook_is_not_added_twice(self):
-        op_py = next(os.path.abspath(p) for p in sw.OP_PY_CANDIDATES if os.path.isfile(p))
-        fake = FakeHermes(hooks=[f'python3 -I "{op_py}" guard --format hermes'])
-        self.run_wizard(fake, ['n', os.path.join(self.tmp.name, 'p'), ''])
+        fake = FakeHermes(hooks=[sw.guard_command()])
+        self.run_wizard(fake, ['n', self.folder, ''])
         self.assertNotIn('hook', [c[0] for c in fake.calls])
 
     def test_operator_only_skips_the_hermes_wizard(self):
         fake = FakeHermes()
-        self.run_wizard(fake, [os.path.join(self.tmp.name, 'p'), '', 'n'], run_hermes=False)
+        self.run_wizard(fake, [self.folder, '', 'n'], run_hermes=False)
         self.assertNotIn('setup', [c[0] for c in fake.calls])
-        self.assertIn('건너뜁니다', '\n'.join(self.out))
+
+    def test_rerun_keeps_previous_answers_as_defaults(self):
+        fake = FakeHermes()
+        self.run_wizard(fake, ['n', self.folder, '1', 'n', 'n'])
+        code, s = self.run_wizard(FakeHermes(), ['n', '', '', 'n', 'n'])
+        self.assertEqual(s['folder'], self.folder)
+        self.assertEqual(s['human_via'], ['messenger'])
 
     def test_needs_a_terminal(self):
         r = subprocess.run([sys.executable, '-I', str(WIZ)], capture_output=True, text=True, stdin=subprocess.DEVNULL)
