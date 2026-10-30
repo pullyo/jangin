@@ -1,0 +1,8 @@
+{
+  "name": "jangin-tui",
+  "version": "0.6.0",
+  "private": true,
+  "type": "module",
+  "description": "Jangin(장인) terminal screen for Hermes Agent. No dependencies; Hermes runs dist/entry.js through HERMES_TUI_DIR.",
+  "license": "MIT"
+}

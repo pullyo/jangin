@@ -234,6 +234,18 @@ jangin 은 자체 체크포인트를 만들지 않고, 프로필 설정에서 `c
 | `/goal` 연결 (6.1절): 플러그인이 goal 을 코드로 시작할 수 있는지, 칸반 `--goal`, 비용 값 갱신 시점, 관문 폴더 | 소스와 문서만 읽었다. M4 시험에서 |
 | `hermes plugins install pullyo/jangin/hermes/jangin` | 하위 폴더만 받아 스킬(op.py)이 없다. 지금은 `install.sh` 로 설치 |
 
+## 7.1 Jangin 전용 화면 (2026-10-30 구현)
+
+OMH 처럼 Hermes 의 화면 프로그램 자리(`HERMES_TUI_DIR/dist/entry.js`, `node` 로 실행)에 우리 화면을 둔다. Hermes 코드는 고치지 않는다.
+- 접속: Hermes 의 `ui-tui/scripts/gateway_bootstrap.py --start` 가 세션 티켓과 WebSocket 주소를 준다 → `new WebSocket(url, protocols)`.
+- 규약(JSON-RPC 2.0, 게이트웨이 `hermes-gateway-v1`): 첫 이벤트 `gateway.ready` → `runtime.describe`(session_create 계약에 `tui` 가 있어야 함)
+  → `session.create {request_id, source: 'tui', cwd}` → `session.info` → `prompt.submit {session_id, text, input_id}`.
+  이벤트 프레임은 `{method:'event', params:{type, session_id, payload, execution_generation, …}}`: message.start/delta/complete,
+  tool.start/complete, status.update, approval.request → `approval.respond {session_id, execution_generation, prompt_id, choice}`,
+  clarify.request → `clarify.respond {…, answer}`, 중단 `session.interrupt {session_id, execution_generation}`, 슬래시 `slash.exec {session_id, command}`.
+  20초마다 `gateway.ping`. 실제 Hermes 0.22.5 에서 세션 생성·답변·슬래시·종료를 확인했다.
+- 남은 것: 세션 이어서 열기(`HERMES_TUI_RESUME`)는 구현만 하고 실제 확인 전, 이미지 첨부·음성·세션 목록 화면 없음, 마크다운은 그대로 출력.
+
 ## 8. 하지 않는 것 (이 설계 범위 밖)
 
 - Hermes 자체를 고치거나 포크하지 않는다. 문서화된 확장 지점(스킬, 셸 훅, 플러그인, cron)만 쓴다.

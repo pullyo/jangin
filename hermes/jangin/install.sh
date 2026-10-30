@@ -10,7 +10,7 @@
 #   sh hermes/jangin/install.sh --no-soul           # 프로필의 SOUL.md 는 그대로 둔다
 #   sh hermes/jangin/install.sh --no-command        # ~/.local/bin/jangin 명령을 만들지 않는다
 #   sh hermes/jangin/install.sh --no-skin           # Jangin 시작 화면(스킨)을 켜지 않는다
-#   sh hermes/jangin/install.sh --classic           # 새 화면(TUI) 대신 예전 화면(classic)을 쓴다. 상자 제목은 "Hermes Agent" 로 남는다
+#   sh hermes/jangin/install.sh --classic           # Jangin 화면 대신 Hermes 예전 화면(classic)을 기본으로 쓴다
 #
 # 하는 일: <HERMES_HOME>/plugins/jangin/ 에 플러그인을 복사하고, 그 안의 skill/ 에 jangin 스킬을 복사한다.
 # SOUL.md 는 원래 것을 SOUL.md.bak-날짜 로 남긴 뒤 바꾼다. 마지막에 `hermes plugins enable jangin` 을 실행하고,
@@ -71,12 +71,17 @@ fi
 rm -rf "$PLUG.new"
 mkdir -p "$PLUG.new/skill"
 for f in __init__.py commands.py setup_wizard.py plugin.yaml SOUL.md config.example.yaml; do cp "$HERE/$f" "$PLUG.new/$f"; done
+# Jangin 화면 프로그램 (Hermes 가 HERMES_TUI_DIR 로 띄운다, oh-my-hermes 와 같은 방식). 의존성 없음.
+mkdir -p "$PLUG.new/tui/dist"
+cp "$HERE/tui/package.json" "$PLUG.new/tui/package.json"
+cp "$HERE/tui/dist/entry.js" "$PLUG.new/tui/dist/entry.js"
 # 스킬: 평가 자료와 캐시는 빼고 복사한다
 (cd "$REPO/skills/jangin" && tar cf - --exclude evals --exclude __pycache__ --exclude '*.pyc' .) | (cd "$PLUG.new/skill" && tar xf -)
 rm -rf "$PLUG"
 mv "$PLUG.new" "$PLUG"
 echo "  + 플러그인: $PLUG"
 echo "  + 스킬:     $PLUG/skill (op: $PLUG/skill/scripts/op.py)"
+echo "  + 화면:     $PLUG/tui (jangin 명령이 HERMES_TUI_DIR 로 띄운다)"
 
 if [ "$SOUL" = 1 ]; then
   if [ -f "$TARGET/SOUL.md" ] && ! cmp -s "$TARGET/SOUL.md" "$HERE/SOUL.md"; then
@@ -147,8 +152,13 @@ if [ "$COMMAND" = 1 ] && [ -n "$CMD_PROFILE" ] && command -v hermes >/dev/null 2
 #   jangin setup --hermes   원래 Hermes 설정 마법사만
 #   jangin setup --jangin-only   Hermes 기본 설정을 건너뛰고 Jangin 단계만
 #   jangin setup model 등   Hermes 설정의 한 단계
-#   jangin update           Hermes 와 jangin 을 함께 최신으로 (jangin 은 $REPO 에서 받아 다시 설치)
+#   jangin update           Hermes 와 Jangin 을 함께 최신으로 (Jangin 은 $REPO 에서 받아 다시 설치)
+#   jangin                  Jangin 화면 (Hermes 게이트웨이 위의 전용 터미널 화면)
+#   jangin --classic        Hermes 의 예전 화면
 #   그 밖의 모든 명령         hermes -p $CMD_PROFILE 로 전달 (jangin chat, jangin gateway restart …)
+HERMES_TUI_DIR="$PLUG/tui"; export HERMES_TUI_DIR
+if [ \$# -eq 0 ]; then exec "$HERMES_BIN" -p "$CMD_PROFILE" --tui; fi
+if [ "\${1:-}" = "--classic" ]; then shift; exec "$HERMES_BIN" -p "$CMD_PROFILE" --cli "\$@"; fi
 if [ "\${1:-}" = "setup" ] && { [ \$# -eq 1 ] || [ "\${2:-}" = "--hermes" ] || [ "\${2:-}" = "--jangin-only" ] || [ "\${2:-}" = "--operator-only" ]; }; then
   shift
   exec "$PYTHON_BIN" -I "$PLUG/setup_wizard.py" --profile "$CMD_PROFILE" "\$@"

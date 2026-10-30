@@ -136,9 +136,12 @@ curl -fsSL https://raw.githubusercontent.com/pullyo/jangin/main/install.sh | sh
 기본 프로필 것을 이어받게 합니다) → `jangin setup`. 이후에는 `jangin` 명령 하나로 씁니다: `jangin chat`,
 `jangin setup`, `jangin update`(Hermes 와 jangin 을 함께 최신으로). Hermes 앱에서는 프로필 목록에서 Jangin 을 고릅니다.
 그냥 `hermes` 는 원래 Hermes 그대로입니다.
-Jangin 프로필의 시작 화면은 JANGIN 글씨와 모루·망치 그림, 갈색·크림색, 한국어 환영 문구로 바뀝니다
-(스킨 `hermes/jangin/skin.yaml`, 끄려면 설치할 때 `--no-skin`). Jangin 프로필은 Hermes 의 새 화면(TUI)을 써서 상자 제목도
-"Jangin v…" 로 나옵니다. 예전 화면은 설치할 때 `--classic` (이때 상자 제목은 Hermes 코드에 고정된 "Hermes Agent" 로 남습니다).
+그냥 `jangin` 을 치면 **Jangin 전용 화면**이 열립니다. oh-my-hermes 와 같은 방식으로, Hermes 가 화면 프로그램을 바꿔 끼우는
+공식 자리(`HERMES_TUI_DIR`)에 우리 화면(`hermes/jangin/tui/dist/entry.js`, 의존성 없는 Node 프로그램)을 둡니다. 모델 호출,
+도구 실행, 승인 판단은 Hermes 게이트웨이가 그대로 하고 화면만 Jangin 것입니다: JANGIN 글씨, 모루·망치 그림, 한국어 안내,
+도구 줄(`┊ ⚒ terminal …`), 승인 카드(번호로 허용·거절), 되묻기, 슬래시 명령, Ctrl+C 중단, `/quit`. Hermes 의 예전 화면은
+`jangin --classic`, Hermes 자체 새 화면(TUI)은 `jangin --tui` 입니다. 스킨(`hermes/jangin/skin.yaml`)은 그 두 화면에 씁니다.
+문제가 생기면 `JANGIN_DEBUG=1 jangin` 이 주고받은 프레임을 `<프로필>/logs/jangin-tui.log` 에 남깁니다.
 
 `jangin setup` 은 먼저 원래 Hermes 설정 마법사(모델·로그인, 터미널, 메신저, 도구)를 그대로 진행하고, 끝나면 jangin
 단계를 Hermes 마법사와 같은 화면(◆ 제목, 번호 선택, 엔터 = 지금 값 유지, Esc 취소)으로 이어서 묻습니다: jangin 플러그인 켜기, 프로젝트 폴더, 승인 방식(데스크톱+메신저 또는 메신저만), 메신저 승인 허용

@@ -139,8 +139,13 @@ grants, the profile inherits the default profile's login), and opens `jangin set
 `jangin chat`, `jangin setup`, `jangin update` (updates Hermes and jangin together). In the Hermes app, pick the Jangin
 profile; plain `hermes` stays stock Hermes.
 The Jangin profile's start screen shows the JANGIN wordmark, an anvil-and-hammer drawing, brown and cream colors and a Korean
-welcome line (skin `hermes/jangin/skin.yaml`; install with `--no-skin` to keep the stock look). The Jangin profile uses Hermes' newer TUI screen, whose panel title also
-reads "Jangin v…"; `--classic` keeps the classic screen, where Hermes hard-codes the "Hermes Agent" title.
+welcome line (skin `hermes/jangin/skin.yaml`; install with `--no-skin` to keep the stock look). Plain `jangin` opens the **Jangin screen**: like oh-my-hermes, it plugs its own terminal
+frontend (`hermes/jangin/tui/dist/entry.js`, a dependency-free Node program) into Hermes' official frontend slot
+(`HERMES_TUI_DIR`). Model calls, tools and approval decisions stay in the Hermes gateway; only the screen is Jangin's: the
+JANGIN wordmark, the anvil-and-hammer art, Korean guidance, tool rows, approval cards (pick by number), clarifying questions,
+slash commands, Ctrl+C interrupt and `/quit`. `jangin --classic` opens Hermes' classic screen and `jangin --tui` Hermes' own
+TUI; the skin (`hermes/jangin/skin.yaml`) applies to those two. `JANGIN_DEBUG=1 jangin` logs the wire frames to
+`<profile>/logs/jangin-tui.log`.
 
 `jangin setup` first runs the original Hermes setup wizard as-is (model and login, terminal, messaging, tools), then adds the
 jangin steps in the same Hermes wizard style (◆ headers, numbered choices, Enter keeps the current value, Esc cancels): enabling the plugin, the project folder, the approval mode (desktop + messenger, or messenger only), the allowed

@@ -219,6 +219,10 @@ class InstallCommandTests(unittest.TestCase):
         plug = self.home / '.hermes' / 'profiles' / 'jangin' / 'plugins' / 'jangin'
         self.assertTrue((plug / 'setup_wizard.py').exists())
         self.assertTrue((self.home / '.hermes' / 'profiles' / 'jangin' / 'skins' / 'jangin.yaml').exists())
+        self.assertTrue((plug / 'tui' / 'dist' / 'entry.js').exists())
+        wrapper = cmd.read_text()
+        self.assertIn('HERMES_TUI_DIR=', wrapper)
+        self.assertIn('--tui', wrapper)
         self.assertIn('config set display.skin jangin', self.log.read_text())
         self.assertIn('config set display.interface tui', self.log.read_text())
         subprocess.run([str(cmd), 'chat', '-q', 'hi'], env=self.env, capture_output=True, text=True)
