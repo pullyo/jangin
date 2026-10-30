@@ -130,9 +130,10 @@ sh operator-skill/hermes/operator/install.sh      # 프로필 'operator' 를 만
 operator setup                                    # 한국어 설정 마법사
 ```
 
-`operator setup` 은 여섯 단계를 차례로 묻습니다: 모델 로그인(필요하면 Hermes 모델 설정으로), operator 플러그인 켜기,
-프로젝트 폴더, 승인 방식(데스크톱+메신저 또는 메신저만), 휴대폰 승인용 메신저와 허용 사용자, 플러그인이 꺼져도 막는
-두 번째 잠금(셸 훅). 원래 Hermes 마법사는 `operator setup --hermes`, 한 단계만은 `operator setup model` 처럼 씁니다.
+`operator setup` 은 먼저 원래 Hermes 설정 마법사(모델·로그인, 터미널, 메신저, 도구)를 그대로 진행하고, 끝나면 operator
+단계를 이어서 묻습니다: operator 플러그인 켜기, 프로젝트 폴더, 승인 방식(데스크톱+메신저 또는 메신저만), 메신저 승인 허용
+사용자, 플러그인이 꺼져도 막는 두 번째 잠금(셸 훅). operator 단계만은 `operator setup --operator-only`, Hermes 마법사만은
+`operator setup --hermes`, Hermes 의 한 단계만은 `operator setup model` 처럼 씁니다.
 
 대화창(Desktop, 또는 연결한 텔레그램 등)에서:
 

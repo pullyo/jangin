@@ -29,7 +29,7 @@ Claude Code, Codex, Cursor, Gemini CLI 지원은 그대로 둔다. Hermes 는 �
 1. Hermes Desktop 을 설치하고 처음 설정(모델 로그인)을 마친다.
 2. 설치: 지금은 저장소를 받아 `sh hermes/operator/install.sh` (프로필 `operator` 를 만들고 플러그인·스킬·SOUL.md 를 넣고 활성화).
    `hermes plugins install pullyo/operator-skill/hermes/operator` 는 하위 폴더만 받아서 스킬(op.py)이 빠진다 — 7절.
-3. 터미널에서 `operator setup` — 한국어 마법사: 모델 로그인, 플러그인, 프로젝트 폴더, 승인 방식, 메신저와 허용 사용자, 두 번째 잠금(셸 훅).
+3. 터미널에서 `operator setup` — 원래 Hermes 마법사(모델·터미널·메신저·도구)를 먼저 그대로 돌리고, 이어서 한국어 operator 단계: 플러그인, 프로젝트 폴더, 승인 방식, 메신저 승인 허용 사용자, 두 번째 잠금(셸 훅).
    대화창의 `/setup` 은 폴더·지금 프로젝트·토큰 읽기(`/setup unlock`). (하루 상한은 M4)
 4. `/idea 동네 빵집 예약 페이지` — 프로젝트 폴더를 만들고 발견 단계가 시작된다. 에이전트가 한 번에 하나씩 묻는다.
 5. 발견 문서가 채워지면 에이전트가 "다음 단계로 넘길 준비가 됐습니다"라고 알린다. 사용자가 `/advance`.

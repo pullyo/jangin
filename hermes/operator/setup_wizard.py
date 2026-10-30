@@ -3,17 +3,16 @@
 
 `operator setup` 이 이 파일을 실행한다. 표준 라이브러리만 쓰는 시스템 python3 로 돌고, Hermes 설정을
 바꿀 때는 Hermes 자신의 함수(hermes_cli.config, agent.shell_hooks)를 Hermes 파이썬으로 불러 쓴다.
-모델 로그인과 메신저 연결은 Hermes 마법사의 해당 단계(`hermes setup model`, `hermes setup gateway`)로 넘긴다.
 
 순서
-  1. 모델 로그인        지금 쓰는 모델을 보여 주고, 필요하면 Hermes 의 모델 설정으로 넘긴다
+  1. Hermes 기본 설정   원래 Hermes 마법사를 그대로 돌린다 (모델, 터미널, 메신저, 도구). 엔터 = 지금 값 유지
   2. operator 플러그인  켜져 있는지 확인하고 꺼져 있으면 켠다
   3. 프로젝트 폴더      /idea 로 만드는 프로젝트가 들어갈 폴더
   4. 승인 방식          새 프로젝트가 사람의 결정을 어디서 받을지 (데스크톱+메신저 / 메신저만)
-  5. 휴대폰 승인        텔레그램 등 메신저 연결과 허용 사용자 확인
+  5. 메신저 승인        operator 명령을 칠 수 있는 사람을 본인으로 좁힌다
   6. 두 번째 잠금       플러그인이 꺼져도 막는 셸 훅
 
-`operator setup --hermes` 는 원래 Hermes 마법사를 그대로 연다.
+`operator setup --operator-only` 는 1단계를 건너뛰고, `operator setup --hermes` 는 원래 Hermes 마법사만 연다.
 """
 import argparse
 import glob
@@ -161,8 +160,9 @@ print(json.dumps({"ok": True, "consented": [s.command for s in consented]}))
 
 # ---------------------------------------------------------------- 마법사
 class Wizard:
-    def __init__(self, hermes, home, ask=input, say=print):
+    def __init__(self, hermes, home, ask=input, say=print, run_hermes=True):
         self.h, self.home, self.ask, self.say = hermes, home, ask, say
+        self.run_hermes = run_hermes
         self.s = load_json(settings_path(home), {})
         self.summary = []
 
@@ -210,7 +210,7 @@ class Wizard:
         except Exception as e:
             self.say(f"  Hermes 설정을 읽지 못했습니다 ({e}). 먼저 `hermes setup` 을 한 번 실행해 주세요.")
             return 1
-        info = self.model(info)
+        info = self.hermes_base(info)
         self.plugin(info)
         self.folder()
         strict = self.approval()
@@ -226,19 +226,29 @@ class Wizard:
         self.say("      휴대폰에서는 연결한 메신저에서 같은 명령을 씁니다. 승인은 /ok <번호>, 대기 목록은 /inbox.")
         return 0
 
-    def model(self, info):
-        self.step(1, "모델 로그인")
-        if info.get("provider"):
-            self.say(f"  지금 모델: {info.get('model') or '기본값'} (제공자: {info['provider']})")
-            if self.yes("모델이나 로그인을 바꿀까요?", False):
-                self.h.run_setup("model")
-                info = self.h.info()
+    def hermes_base(self, info):
+        self.step(1, "Hermes 기본 설정 (모델·터미널·메신저·도구)")
+        if not self.run_hermes:
+            self.say(f"  건너뜁니다. 지금 모델: {info.get('model') or '기본값'} ({info.get('provider') or '로그인 없음'})")
         else:
-            self.say("  아직 모델 로그인이 없습니다. Hermes 모델 설정으로 넘어갑니다.")
-            self.say("  처음이면 Nous Portal(무료 로그인) 이나 이미 쓰는 ChatGPT·Claude 구독을 고르면 됩니다.")
-            self.h.run_setup("model")
-            info = self.h.info()
+            self.say("  먼저 원래 Hermes 설정 마법사를 그대로 진행합니다 (영어 화면).")
+            self.say("  순서: 모델과 로그인 → 터미널 실행 방식 → 메신저 연결 → 도구.")
+            self.say("  질문마다 엔터를 누르면 지금 값이 그대로 유지됩니다. 끝나면 operator 설정으로 돌아옵니다.")
+            if info.get("provider"):
+                self.say(f"  지금 모델: {info.get('model') or '기본값'} ({info['provider']})")
+                go = self.yes("Hermes 기본 설정을 진행할까요? (n = 지금 값 그대로 두고 operator 설정으로)", True)
+            else:
+                self.say("  아직 모델 로그인이 없어서 반드시 진행합니다.")
+                self.say("  처음이면 Quick Setup(Nous Portal 무료 로그인) 이나 이미 쓰는 ChatGPT·Claude 구독을 고르면 됩니다.")
+                go = True
+            if go:
+                code = self.h.run_setup()
+                if code not in (0, None):
+                    self.say("  Hermes 설정이 중간에 끝났습니다. 거기까지 저장된 값으로 operator 설정을 이어 갑니다.")
+                info = self.h.info()
         self.summary.append(f"모델: {info.get('model') or '기본값'} ({info.get('provider') or '로그인 없음'})")
+        if info.get("messengers"):
+            self.summary.append(f"메신저: {', '.join(info['messengers'])}")
         return info
 
     def plugin(self, info):
@@ -276,21 +286,18 @@ class Wizard:
         return n == 2
 
     def messenger(self, info, strict):
-        self.step(5, "휴대폰 승인 (메신저)")
-        if info.get("messengers"):
-            self.say(f"  연결된 메신저: {', '.join(info['messengers'])}")
-            change = self.yes("메신저 설정을 다시 할까요?", False)
-        else:
+        self.step(5, "메신저 승인")
+        if not info.get("messengers"):
             self.say("  연결된 메신저가 없습니다. 연결하면 밖에서도 휴대폰으로 승인할 수 있습니다.")
             if strict:
                 self.say("  승인 방식을 '메신저만' 으로 골라서, 메신저가 없으면 승인할 방법이 없습니다.")
-            self.say("  텔레그램이 가장 쉽습니다: @BotFather 에서 봇을 만들고 토큰을 넣은 뒤, 허용 사용자에 본인 ID 하나만 넣습니다.")
-            change = self.yes("지금 연결할까요?", strict)
-        if change:
-            self.h.run_setup("gateway")
-            info = self.h.info()
+                if self.yes("지금 Hermes 메신저 설정으로 연결할까요?", True):
+                    self.h.run_setup("gateway")
+                    info = self.h.info()
+            else:
+                self.say("  나중에 연결하려면: operator setup gateway  (텔레그램이 가장 쉽습니다)")
         if not info.get("messengers"):
-            self.summary.append("메신저: 연결 안 함" + (" (메신저만 승인으로 골라서 지금은 승인할 수 없음)" if strict else ""))
+            self.summary.append("메신저 승인: 없음" + (" (메신저만 승인으로 골라서 지금은 승인할 수 없음)" if strict else ""))
             return info
         if info.get("allow_all"):
             self.say("  ! 게이트웨이가 모든 사용자를 받도록 설정돼 있습니다 (GATEWAY_ALLOW_ALL_USERS). 누구나 /ok 를 칠 수 있습니다.")
@@ -300,15 +307,15 @@ class Wizard:
             self.say(f"  텔레그램 허용 사용자: {tg}")
         if users:
             self.say(f"  operator 명령 허용 사용자: {users}")
-        if not users:
+        else:
             self.say("  operator 명령(/ok, /advance 등)을 칠 수 있는 사람을 본인 한 명으로 좁히는 것을 권합니다.")
-            guess = tg.split(",")[0].strip() if tg and "," not in tg else ""
+            guess = tg.strip() if tg and "," not in tg else ""
             a = self.ask(f"  본인 메신저 사용자 ID [엔터 = {guess or '건너뛰기'}] ").strip() or guess
             if a:
                 self.h.set_env("OPERATOR_ALLOWED_USERS", a)
                 users = a
                 self.say("  저장했습니다. Hermes 게이트웨이를 다시 시작하면 적용됩니다 (`operator gateway restart`).")
-        self.summary.append(f"메신저: {', '.join(info['messengers'])}" + (f", operator 허용 사용자 {users}" if users else ", 허용 사용자 미지정"))
+        self.summary.append("메신저 승인: " + (f"operator 허용 사용자 {users}" if users else "허용 사용자 미지정 (게이트웨이 허용 사용자 전원)"))
         return info
 
     def guard_hook(self, info):
@@ -340,7 +347,8 @@ class Wizard:
 def main(argv=None):
     p = argparse.ArgumentParser(prog="operator setup", description="Operator 설정 마법사")
     p.add_argument("--profile", default=os.environ.get("OPERATOR_HERMES_PROFILE", "default"))
-    p.add_argument("--hermes", action="store_true", help="원래 Hermes 설정 마법사를 연다")
+    p.add_argument("--hermes", action="store_true", help="원래 Hermes 설정 마법사만 연다")
+    p.add_argument("--operator-only", action="store_true", help="Hermes 기본 설정을 건너뛰고 operator 단계만")
     args, rest = p.parse_known_args(argv)
     home = hermes_home(args.profile)
     h = Hermes(args.profile, home)
@@ -350,7 +358,7 @@ def main(argv=None):
         print("operator setup 은 질문에 답하는 대화형 마법사라 터미널에서 실행해야 합니다.")
         return 2
     try:
-        return Wizard(h, home).run()
+        return Wizard(h, home, run_hermes=not args.operator_only).run()
     except (KeyboardInterrupt, EOFError):
         print("\n설정을 멈췄습니다. 이미 답한 단계까지만 저장됐습니다.")
         return 130

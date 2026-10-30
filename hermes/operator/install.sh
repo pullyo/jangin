@@ -85,10 +85,11 @@ if [ "$COMMAND" = 1 ] && [ -n "$CMD_PROFILE" ] && command -v hermes >/dev/null 2
 #!/bin/sh
 # operator — Operator(Hermes 배포판) 명령. operator-skill 의 install.sh 가 만들었다.
 #   operator setup            한국어 operator 설정 마법사
-#   operator setup --hermes   원래 Hermes 설정 마법사
+#   operator setup --hermes   원래 Hermes 설정 마법사만
+#   operator setup --operator-only   Hermes 기본 설정을 건너뛰고 operator 단계만
 #   operator setup model 등   Hermes 설정의 한 단계
 #   그 밖의 모든 명령         hermes -p $CMD_PROFILE 로 전달 (operator chat, operator gateway restart …)
-if [ "\${1:-}" = "setup" ] && { [ \$# -eq 1 ] || [ "\${2:-}" = "--hermes" ]; }; then
+if [ "\${1:-}" = "setup" ] && { [ \$# -eq 1 ] || [ "\${2:-}" = "--hermes" ] || [ "\${2:-}" = "--operator-only" ]; }; then
   shift
   exec "$PYTHON_BIN" -I "$PLUG/setup_wizard.py" --profile "$CMD_PROFILE" "\$@"
 fi
@@ -103,6 +104,6 @@ cat <<MSG
 설치 완료. 다음:
   1. 메신저로 승인하려면 이 프로필의 게이트웨이에 텔레그램 등을 연결하고 허용 사용자(TELEGRAM_ALLOWED_USERS)를 본인으로 한다.
   2. (선택) 셸 훅도 걸어 두면 플러그인이 꺼져도 막는다: $PLUG/config.example.yaml 의 hooks 부분.
-  3. 터미널에서: operator setup   (모델, 프로젝트 폴더, 승인 방식, 메신저, 두 번째 잠금)
+  3. 터미널에서: operator setup   (Hermes 기본 설정 → 프로젝트 폴더, 승인 방식, 메신저 허용 사용자, 두 번째 잠금)
   4. Hermes 앱 새 대화에서: /idea 동네 빵집 예약 페이지
 MSG

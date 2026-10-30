@@ -132,10 +132,10 @@ sh operator-skill/hermes/operator/install.sh      # creates the 'operator' profi
 operator setup                                    # guided setup (Korean)
 ```
 
-`operator setup` walks through six steps: model login (handing off to Hermes' model setup when needed), enabling the plugin,
-the project folder, the approval mode (desktop + messenger, or messenger only), the messenger and its allowed user for phone
-approvals, and a second lock (a shell hook that blocks even if the plugin is off). `operator setup --hermes` opens the original
-Hermes wizard; `operator setup model` runs one Hermes section.
+`operator setup` first runs the original Hermes setup wizard as-is (model and login, terminal, messaging, tools), then adds the
+operator steps: enabling the plugin, the project folder, the approval mode (desktop + messenger, or messenger only), the allowed
+user for messenger approvals, and a second lock (a shell hook that blocks even if the plugin is off). `operator setup --operator-only`
+skips the Hermes part, `operator setup --hermes` runs only the Hermes wizard, and `operator setup model` runs one Hermes section.
 
 In the chat (Desktop, or a connected Telegram etc.): `/idea <one line>`, `/project`, `/stage`, `/advance`, `/back <stage> <reason>`,
 `/inbox`, `/ok <id>`, `/reject <id> <reason>`, `/setup`. Hermes' built-in `/approve` is for dangerous-command prompts and is not

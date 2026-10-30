@@ -31,7 +31,7 @@ class FakeHermes:
 
     def run_setup(self, section=None):
         self.calls.append(('setup', section))
-        if section == 'model':
+        if section in ('model', None):
             self.state['provider'] = self.state['provider'] or 'nous'
         if section == 'gateway':
             self.state.update(telegram=True, messengers=['telegram'], telegram_users='424242')
@@ -60,54 +60,61 @@ class WizardTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def run_wizard(self, fake, answers):
+    def run_wizard(self, fake, answers, run_hermes=True):
         it = iter(answers)
-        w = sw.Wizard(fake, self.home, ask=lambda q: next(it), say=self.out.append)
+        w = sw.Wizard(fake, self.home, ask=lambda q: next(it), say=self.out.append, run_hermes=run_hermes)
         code = w.run()
         return code, json.loads(Path(sw.settings_path(self.home)).read_text(encoding='utf-8'))
 
-    def test_defaults_keep_everything_and_turn_on_the_second_lock(self):
+    def test_defaults_run_the_full_hermes_wizard_first_then_operator_steps(self):
         fake = FakeHermes()
         folder = os.path.join(self.tmp.name, 'projects')
-        # 모델 바꿀까요 n · 폴더 · 승인 방식 엔터 · 메신저 연결 n · 셸 훅 엔터(Y)
-        code, s = self.run_wizard(fake, ['n', folder, '', 'n', ''])
+        # Hermes 기본 설정 진행 엔터(Y) · 폴더 · 승인 방식 엔터 · 셸 훅 엔터(Y)
+        code, s = self.run_wizard(fake, ['', folder, '', ''])
         self.assertEqual(code, 0)
+        self.assertEqual(fake.calls[0], ('setup', None))     # 원래 Hermes 마법사 전체가 먼저
         self.assertEqual(s['folder'], folder)
         self.assertTrue(os.path.isdir(folder))
         self.assertEqual(s['human_via'], ['local', 'messenger'])
-        self.assertEqual([c[0] for c in fake.calls], ['hook'])
-        self.assertIn('guard --format hermes', fake.calls[0][1])
+        self.assertEqual([c[0] for c in fake.calls], ['setup', 'hook'])
+        self.assertIn('guard --format hermes', fake.calls[1][1])
         text = '\n'.join(self.out)
-        self.assertIn('[1/6] 모델 로그인', text)
+        self.assertIn('[1/6] Hermes 기본 설정', text)
         self.assertIn('[6/6] 두 번째 잠금', text)
         self.assertIn('/idea', text)
 
     def test_strict_mode_offers_messenger_and_narrows_operator_users(self):
         fake = FakeHermes()
-        # 모델 n · 폴더 엔터 · 승인 방식 2(메신저만) · 지금 연결할까요 엔터(엄격이면 기본 Y) · 사용자 ID 엔터(=텔레그램 허용 사용자) · 셸 훅 n
+        # Hermes 기본 설정 n · 폴더 · 승인 방식 2(메신저만) · 지금 연결할까요 엔터(Y) · 사용자 ID 엔터(=텔레그램 허용 사용자) · 셸 훅 n
         code, s = self.run_wizard(fake, ['n', os.path.join(self.tmp.name, 'p'), '2', '', '', 'n'])
         self.assertEqual(s['human_via'], ['messenger'])
         self.assertIn(('setup', 'gateway'), fake.calls)
         self.assertIn(('env', 'OPERATOR_ALLOWED_USERS', '424242'), fake.calls)
         self.assertNotIn('hook', [c[0] for c in fake.calls])
 
-    def test_no_login_goes_straight_to_hermes_model_setup_and_enables_plugin(self):
+    def test_no_login_runs_the_hermes_wizard_without_asking_and_enables_plugin(self):
         fake = FakeHermes(provider=None, plugins=[])
-        code, s = self.run_wizard(fake, [os.path.join(self.tmp.name, 'p'), '1', 'n', 'n'])
-        self.assertEqual(fake.calls[0], ('setup', 'model'))
+        code, s = self.run_wizard(fake, [os.path.join(self.tmp.name, 'p'), '1', 'n'])
+        self.assertEqual(fake.calls[0], ('setup', None))
         self.assertIn(('enable',), fake.calls)
 
     def test_bad_answers_are_asked_again(self):
         fake = FakeHermes()
-        code, s = self.run_wizard(fake, ['음', 'n', os.path.join(self.tmp.name, 'p'), '9', '1', 'n', 'n'])
+        code, s = self.run_wizard(fake, ['음', 'n', os.path.join(self.tmp.name, 'p'), '9', '1', 'n'])
         self.assertEqual(s['human_via'], ['local', 'messenger'])
         self.assertIn('y 또는 n 으로 답해 주세요.', '\n'.join(self.out))
 
     def test_existing_hook_is_not_added_twice(self):
         op_py = next(os.path.abspath(p) for p in sw.OP_PY_CANDIDATES if os.path.isfile(p))
         fake = FakeHermes(hooks=[f'python3 -I "{op_py}" guard --format hermes'])
-        self.run_wizard(fake, ['n', os.path.join(self.tmp.name, 'p'), '', 'n'])
+        self.run_wizard(fake, ['n', os.path.join(self.tmp.name, 'p'), ''])
         self.assertNotIn('hook', [c[0] for c in fake.calls])
+
+    def test_operator_only_skips_the_hermes_wizard(self):
+        fake = FakeHermes()
+        self.run_wizard(fake, [os.path.join(self.tmp.name, 'p'), '', 'n'], run_hermes=False)
+        self.assertNotIn('setup', [c[0] for c in fake.calls])
+        self.assertIn('건너뜁니다', '\n'.join(self.out))
 
     def test_needs_a_terminal(self):
         r = subprocess.run([sys.executable, '-I', str(WIZ)], capture_output=True, text=True, stdin=subprocess.DEVNULL)
@@ -168,6 +175,8 @@ class InstallCommandTests(unittest.TestCase):
         subprocess.run([str(cmd), 'chat', '-q', 'hi'], env=self.env, capture_output=True, text=True)
         subprocess.run([str(cmd), 'setup', 'model'], env=self.env, capture_output=True, text=True)
         subprocess.run([str(cmd), 'setup', '--hermes'], env=self.env, capture_output=True, text=True)
+        o = subprocess.run([str(cmd), 'setup', '--operator-only'], env=self.env, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+        self.assertIn('터미널', o.stdout)
         w = subprocess.run([str(cmd), 'setup'], env=self.env, capture_output=True, text=True, stdin=subprocess.DEVNULL)
         self.assertIn('터미널', w.stdout)   # 마법사가 받았다 (터미널이 없어서 안내만)
         log = self.log.read_text().splitlines()
