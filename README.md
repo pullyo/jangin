@@ -139,7 +139,8 @@ grants, the profile inherits the default profile's login), and opens `jangin set
 `jangin chat`, `jangin setup`, `jangin update` (updates Hermes and jangin together). In the Hermes app, pick the Jangin
 profile; plain `hermes` stays stock Hermes.
 The Jangin profile's start screen shows the JANGIN wordmark, an anvil-and-hammer drawing, brown and cream colors and a Korean
-welcome line (skin `hermes/jangin/skin.yaml`; install with `--no-skin` to keep the stock look).
+welcome line (skin `hermes/jangin/skin.yaml`; install with `--no-skin` to keep the stock look). The Jangin profile uses Hermes' newer TUI screen, whose panel title also
+reads "Jangin v…"; `--classic` keeps the classic screen, where Hermes hard-codes the "Hermes Agent" title.
 
 `jangin setup` first runs the original Hermes setup wizard as-is (model and login, terminal, messaging, tools), then adds the
 jangin steps in the same Hermes wizard style (◆ headers, numbered choices, Enter keeps the current value, Esc cancels): enabling the plugin, the project folder, the approval mode (desktop + messenger, or messenger only), the allowed

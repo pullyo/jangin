@@ -10,6 +10,7 @@
 #   sh hermes/jangin/install.sh --no-soul           # 프로필의 SOUL.md 는 그대로 둔다
 #   sh hermes/jangin/install.sh --no-command        # ~/.local/bin/jangin 명령을 만들지 않는다
 #   sh hermes/jangin/install.sh --no-skin           # Jangin 시작 화면(스킨)을 켜지 않는다
+#   sh hermes/jangin/install.sh --classic           # 새 화면(TUI) 대신 예전 화면(classic)을 쓴다. 상자 제목은 "Hermes Agent" 로 남는다
 #
 # 하는 일: <HERMES_HOME>/plugins/jangin/ 에 플러그인을 복사하고, 그 안의 skill/ 에 jangin 스킬을 복사한다.
 # SOUL.md 는 원래 것을 SOUL.md.bak-날짜 로 남긴 뒤 바꾼다. 마지막에 `hermes plugins enable jangin` 을 실행하고,
@@ -23,6 +24,7 @@ SOUL=1
 COMMAND=1
 FRESH=0
 SKIN=1
+IFACE=tui
 while [ $# -gt 0 ]; do
   case "$1" in
     --profile) PROFILE=$2; shift 2 ;;
@@ -31,7 +33,8 @@ while [ $# -gt 0 ]; do
     --no-command) COMMAND=0; shift ;;
     --fresh) FRESH=1; shift ;;
     --no-skin) SKIN=0; shift ;;
-    -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
+    --classic) IFACE=cli; shift ;;
+    -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
     *) echo "모르는 옵션: $1" >&2; exit 1 ;;
   esac
 done
@@ -89,6 +92,9 @@ mkdir -p "$TARGET/skins"
 cp "$HERE/skin.yaml" "$TARGET/skins/jangin.yaml"
 if [ "$SKIN" = 1 ] && [ -z "${HOME_GIVEN:-}" ] && command -v hermes >/dev/null 2>&1; then
   HERMES_HOME="$TARGET" hermes config set display.skin jangin >/dev/null 2>&1 && echo "  + 시작 화면: Jangin 스킨 ($TARGET/skins/jangin.yaml)"
+  # Hermes 의 새 화면(TUI)은 상자 제목에 스킨 이름(Jangin)을 쓴다. 예전 화면(cli)은 "Hermes Agent" 가 코드에 고정돼 있다.
+  HERMES_HOME="$TARGET" hermes config set display.interface "$IFACE" >/dev/null 2>&1 \
+    && echo "  + 화면: $( [ "$IFACE" = tui ] && echo '새 화면(TUI, 제목도 Jangin)' || echo '예전 화면(classic)' )"
 fi
 
 if command -v hermes >/dev/null 2>&1; then
