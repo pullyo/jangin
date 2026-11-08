@@ -71,9 +71,9 @@ jangin 은 [Agent Skill](https://agentskills.io) 과 의존성 없는 작은 파
 | 거절에서 배우기 | `op feedback` | 거절 사유를 모아 다음 초안 전에 읽음 |
 | 모델 라우팅 | `op llm` | 좁은 작업은 로컬 OpenAI 호환 모델(예: Ollama)로, 없으면 에이전트가 직접 |
 
-## 빠른 시작 (5분)
+## 빠른 시작 — 알아야 할 것은 세 가지
 
-**1. 설치** (하나 고르기)
+**1. 설치** (한 번)
 
 ```text
 # Claude Code — 플러그인, 훅이 자동 연결됨
@@ -82,45 +82,36 @@ jangin 은 [Agent Skill](https://agentskills.io) 과 의존성 없는 작은 파
 ```
 
 ```bash
-# 어떤 도구든 수동 설치: ~/.claude, ~/.codex, ~/.cursor, ~/.gemini 중 있는 곳에 링크
+# 또는 직접: 스킬 링크 + Claude Code 훅 + op 명령(~/.local/bin)을 한 번에
 git clone https://github.com/pullyo/jangin
-sh jangin/skills/jangin/install.sh
-sh jangin/skills/jangin/install.sh --print-hooks   # Claude Code / Codex / Cursor / Gemini CLI / Hermes 용 훅 설정
+sh jangin/skills/jangin/install.sh --with-hooks
 ```
 
-훅 없이도 스킬은 동작하지만, 그때 차단은 보장이 아니라 지시 수준이 됩니다.
-
-**2. 프로젝트 하나에서 켜기**
-
-```bash
-alias op="$PWD/jangin/skills/jangin/scripts/op"   # 또는 scripts/op 를 PATH 에 추가
-mkdir ~/bakery-booking && cd ~/bakery-booking && op init    # 새 아이디어는 발견 단계에서 시작
-# 이미 운영 중인 제품이면:  op init --stage operate
-```
-
-**3. 에이전트에게 말하기** (그 폴더에서 새 세션을 열고)
+**2. 에이전트에게 말하기** — 프로젝트 폴더를 만들고 그 폴더에서 새 세션을 열어:
 
 > 동네 빵집용 예약 페이지를 만들어 보고 싶어. jangin 으로 같이 정리해 줘.
 
-에이전트가 한 번에 하나씩 묻고, 답을 `.operator/stages/discover.md` 에 정리합니다(문제, 고객, 제안, 성공 지표).
-`op stage check` 를 통과하면 다음 단계로 넘겨 달라고 요청합니다.
+준비(`op init`)는 에이전트가 합니다. 한 번에 하나씩 묻고, 조사하고, 만들고, 초안을 씁니다.
 
-**4. 단계 이동과 승인은 직접**
+**3. 확인할 것이 생기면 터미널에서 `op`**
 
-```bash
-op stage                 # 지금 위치와 남은 조건
-op stage advance         # 조건을 통과하면 발견 → 검증 → 만들기 → 운영 → 배우기
-op pending list
-op pending approve 0001  # 이 터미널에서 바로 발송. 또는: op pending reject 0001 --reason "너무 딱딱함"
+```text
+$ op
+📍 bakery-booking · 운영 단계
+✋ 확인할 것 2건
+
+  [1/2] 0001 포스트 · X  "예약 오픈했어요…"
+      승인하면 X(으)로 바로 보낸다.
+  a 승인 · r 거절 · v 전체 보기 · s 나중에 · q 끝 > a
+
+  [2/2] 다음 단계로: 운영 → 배우기
+  a 넘기기 · s 아직 · q 끝 >
 ```
 
-**5. 운영 단계에 오면 채널 연결**
+게시물·메일·배포 승인, 거절(사유는 다음 초안에 반영), 다음 단계로 넘기기를 모두 이 화면에서 합니다.
+X·메일 같은 채널이 아직 연결되지 않았으면 처음 승인하는 순간 "지금 연결할까?" 하고 묻습니다. 미리 설정할 것은 없습니다.
 
-```bash
-op secret set OPERATOR_WEBHOOK_URL   # 먼저 개인 Discord/Slack 웹훅으로 전체 흐름 확인
-op connect x                         # 그다음 X (채널 설정 참고), Threads, 이메일
-op telegram                          # 선택: 휴대폰으로 승인
-```
+휴대폰으로 승인하고 싶으면 `op telegram`. 나머지 명령은 아래 [명령](#명령) 에 있지만 대부분 에이전트가 씁니다.
 
 ## Hermes 에서 쓰기 (전용 사업 비서)
 
@@ -164,6 +155,8 @@ Hermes 에서 친 명령만 받습니다. 휴대폰 메신저에서 친 명령�
 설계와 확인한 것·아직인 것: [docs/hermes-design.md](docs/hermes-design.md).
 
 ## 명령
+
+사람에게 필요한 것은 `op` 하나입니다. 아래는 고급 사용과 에이전트용입니다.
 
 | 명령 | 누가 | 용도 |
 |---|---|---|

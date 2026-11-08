@@ -1,3 +1,9 @@
 #!/bin/sh
 # op — 어떤 셸/에이전트에서든 같은 진입점. python3 표준 라이브러리만 필요.
-exec python3 -I "$(dirname "$0")/op.py" "$@"
+# ~/.local/bin/op 처럼 링크로 불려도 진짜 위치의 op.py 를 찾는다.
+SELF="$0"
+while [ -L "$SELF" ]; do
+  LINK=$(readlink "$SELF")
+  case "$LINK" in /*) SELF="$LINK" ;; *) SELF="$(dirname "$SELF")/$LINK" ;; esac
+done
+exec python3 -I "$(cd "$(dirname "$SELF")" && pwd)/op.py" "$@"

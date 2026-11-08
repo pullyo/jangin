@@ -72,9 +72,9 @@ so the agent's own shell tool can never approve or advance anything.
 | Learning from "no" | `op feedback` | Rejection reasons are collected and read before the next draft |
 | Model routing | `op llm` | Sends narrow tasks to a local OpenAI-compatible model (e.g. Ollama), falls back to the agent |
 
-## Quick start (5 minutes)
+## Quick start — three things to know
 
-**1. Install** (pick one)
+**1. Install** (once)
 
 ```text
 # Claude Code — plugin, hook is wired automatically
@@ -83,45 +83,38 @@ so the agent's own shell tool can never approve or advance anything.
 ```
 
 ```bash
-# Any tool, by hand: links the skill into ~/.claude, ~/.codex, ~/.cursor, ~/.gemini (whichever exist)
+# or by hand: skill links + Claude Code hook + the op command (~/.local/bin) in one go
 git clone https://github.com/pullyo/jangin
-sh jangin/skills/jangin/install.sh
-sh jangin/skills/jangin/install.sh --print-hooks   # hook snippets for Claude Code / Codex / Cursor / Gemini CLI / Hermes
+sh jangin/skills/jangin/install.sh --with-hooks
 ```
 
-Without a hook the skill still works, but blocking becomes an instruction instead of a guarantee.
-
-**2. Turn it on for one project**
-
-```bash
-alias op="$PWD/jangin/skills/jangin/scripts/op"   # or put scripts/op on your PATH
-mkdir ~/bakery-booking && cd ~/bakery-booking && op init    # a new idea starts at the discover stage
-# already running a product?  op init --stage operate
-```
-
-**3. Talk to your agent** (open a new session in that folder)
+**2. Talk to your agent** — make a project folder and open a new session there:
 
 > I want to build a booking page for small bakeries. Let's figure it out with jangin.
 
-The agent asks one question at a time and writes the answers into `.operator/stages/discover.md`
-(problem, customer, offer, success metric). When `op stage check` passes it asks you to move on.
+The agent sets the project up (`op init`) itself, then asks one question at a time, researches, builds and drafts.
 
-**4. Move stages and approve things — yourself**
+**3. When something needs you, type `op` in a terminal**
 
-```bash
-op stage                 # where you are and what is left
-op stage advance         # discover → validate → build → operate → learn, after the checks pass
-op pending list
-op pending approve 0001  # sends right away from this terminal; or: op pending reject 0001 --reason "too stiff"
+```text
+$ op
+📍 bakery-booking · 운영 단계
+✋ 확인할 것 2건
+
+  [1/2] 0001 포스트 · X  "예약 오픈했어요…"
+      승인하면 X(으)로 바로 보낸다.
+  a 승인 · r 거절 · v 전체 보기 · s 나중에 · q 끝 > a
+
+  [2/2] 다음 단계로: 운영 → 배우기
+  a 넘기기 · s 아직 · q 끝 >
 ```
 
-**5. Connect channels when you reach the operate stage**
+(The CLI speaks Korean: `a` approve · `r` reject · `v` view · `s` later · `q` quit; for a stage, `a` advances.)
 
-```bash
-op secret set OPERATOR_WEBHOOK_URL   # start with a private Discord/Slack webhook to see the whole loop
-op connect x                         # then X (see channels guide), Threads, email
-op telegram                          # optional: approve from your phone
-```
+Approving posts, emails and deploys, rejecting (the reason feeds the next draft) and moving to the next stage all happen here.
+If a channel such as X or email is not connected yet, the first approval asks "connect now?". Nothing to set up in advance.
+
+To approve from your phone, run `op telegram`. Every other command is listed under [Commands](#commands); the agent uses most of them.
 
 ## Using it in Hermes (a dedicated business assistant)
 
@@ -159,6 +152,8 @@ jangin's `/ok`. Projects made with `/idea` refuse terminal approvals; to accept 
 `"human_via": ["messenger"]` in `.operator/guard.json`. Design, and what is and is not verified: [docs/hermes-design.md](docs/hermes-design.md).
 
 ## Commands
+
+A person only needs `op`. The table below is for advanced use and for the agent.
 
 | Command | Who | Purpose |
 |---|---|---|

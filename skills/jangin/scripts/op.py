@@ -11,7 +11,8 @@ Cursor, Gemini CLI, ...)에서든 같은 명령으로 동작한다. 표준 라�
   3. 검증 게이트             → op verify (pending add 전에 자동 실행)
   4. 모델 라우팅             → op llm --role ... (로컬 모델이 있으면 거기로)
 
-사용법: op.py <command> [args]   (op.py help 로 전체 목록)
+사용법: op            (사람: 확인할 것을 하나씩 보고 정한다)
+       op <command>  (op help 로 전체 목록)
 """
 import html
 import json
@@ -481,7 +482,7 @@ def cmd_pass(args):
             f.write("\n".join(md) + "\n")
         os.remove(sp)
         print(f"pass 종료: {pid} → .operator/passes/{pid}.md")
-        print(f"승인 대기 {len(pend)}건. 사람이 {human_hint(od, 'op pending list', '/inbox')} 로 확인한다.")
+        print(f"승인 대기 {len(pend)}건. 사람이 {human_hint(od, 'op', '/inbox')} 로 확인한다.")
         return
 
     if sub == "show":
@@ -680,7 +681,7 @@ def cmd_pending(args):
         with open(dst, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
         print(f"승인 대기에 올림: .operator/pending/{fname}")
-        print(f"이제 이 항목은 사람이 {human_hint(od, 'op pending approve ' + item_id, '/ok ' + item_id)} 로 승인할 때까지 밖으로 나가지 않는다.")
+        print(f"이제 이 항목은 사람이 {human_hint(od, 'op', '/ok ' + item_id)} 로 승인할 때까지 밖으로 나가지 않는다.")
         return
 
     if sub == "list":
@@ -1152,7 +1153,7 @@ def cmd_stage(args):
             ms = load_milestones(od)
             print(f"마일스톤: {len([m for m in ms if m.get('done')])}/{len(ms)} 통과  (op milestone list)")
         checks, target = stage_checks(od, cur, cfg)
-        print(f"넘어가기 조건 ({'모두 통과 → 사람에게 ' + human_hint(od, 'op stage advance', '/advance') + ' 요청' if all(c[1] for c in checks) else '아직'}):")
+        print(f"넘어가기 조건 ({'모두 통과 → 사람에게 ' + human_hint(od, 'op', '/advance') + ' 요청' if all(c[1] for c in checks) else '아직'}):")
         print_checks(checks)
         return
 
@@ -1175,7 +1176,7 @@ def cmd_stage(args):
         print(f"{STAGE_KO[cur]} 단계: {'PASS' if ok else 'FAIL'}" + (f" → 다음: {STAGE_KO[target]}" if ok and target else ""))
         print_checks(checks)
         if ok:
-            print(f"사람에게 결과를 보여 주고 {human_hint(od, 'op stage advance', '/advance')} 를 실행해 달라고 요청해라.")
+            print(f"사람에게 결과를 보여 주고 {human_hint(od, 'op', '/advance')} 를 실행해 달라고 요청해라.")
         sys.exit(0 if ok else 1)
 
     if sub == "history":
@@ -2300,19 +2301,238 @@ def cmd_llm(args):
 
 
 # ---------------------------------------------------------------- main
+# ---------------------------------------------------------------- home (사람이 외울 명령은 이것 하나: op)
+# 인자 없이 `op` 를 치면 확인할 것(승인 대기, 다음 단계로 넘기기, 보내기 실패)을 하나씩 보여 주고 그 자리에서 정한다.
+# 결정은 대화형 터미널에서만 된다. 에이전트의 셸에서는 목록만 보여 준다 (terminal_authority).
+CHANNEL_KO = {"x": "X", "threads": "Threads", "email": "이메일", "webhook": "웹훅(Slack/Discord)"}
+YES = ("y", "yes", "ㅛ", "네", "예", "응")
+
+
+def _ask(prompt, default=""):
+    """한 줄 입력. 입력이 끝났으면(EOF) None."""
+    try:
+        ans = input(prompt)
+    except EOFError:
+        print()
+        return None
+    return ans.strip() or default
+
+
+def _secret_input(name):
+    if os.environ.get("OPERATOR_SECRET_VALUE") is not None:   # 테스트용. cmd_secret 과 같은 규칙
+        return os.environ["OPERATOR_SECRET_VALUE"]
+    import getpass
+    try:
+        return getpass.getpass(f"  {name} 값 (화면에 보이지 않음, 엔터 = 그만두기): ").strip()
+    except EOFError:
+        return ""
+
+
+def missing_channel_secrets(meta):
+    """(채널, 없는 토큰 이름들). 승인하면 `op deliver` 로 바로 나가는 티켓만 본다. 값은 읽지 않는다."""
+    ch = ticket_channel(meta)
+    if not ch or not re.fullmatch(r"op(?:\.py)?\s+deliver\s+\d{4}", (meta.get("action") or "").strip()):
+        return ch, []
+    env = channel_env(read_keychain=False)
+    return ch, [n for n in CHANNELS[ch]["env"] if not secret_present(n, env)]
+
+
+def connect_channel(ch, missing, auth):
+    """승인하려는 순간 채널이 연결돼 있지 않으면 여기서 연결한다. 연결했으면 True."""
+    print(f"  {CHANNEL_KO.get(ch, ch)} 이(가) 아직 연결되지 않았다 ({CHANNELS[ch]['doc']}).")
+    ans = _ask("  지금 연결할까? [Y/n] ", "y")
+    if ans is None or ans.lower() not in YES:
+        return False
+    try:
+        if ch == "x":
+            if not secret_present("X_CLIENT_ID", channel_env(read_keychain=False)):
+                print("  X 개발자 포털에서 앱을 만들고 OAuth 2.0 Client ID 를 넣는다. 앱의 Callback URI: http://127.0.0.1:8766/callback")
+                v = _secret_input("X_CLIENT_ID")
+                if not v:
+                    return False
+                secret_store("X_CLIENT_ID", v, auth)
+                v = _secret_input("X_CLIENT_SECRET (공개 클라이언트면 엔터)")
+                if v:
+                    secret_store("X_CLIENT_SECRET", v, auth)
+            cmd_connect(["x"])
+        else:
+            for n in missing:
+                v = _secret_input(n)
+                if not v:
+                    return False
+                where = secret_store(n, v, auth)
+                print(f"  {n} 저장 → {where}")
+    except OpError as e:
+        print(f"  연결 실패: {e.msg}")
+        return False
+    return not missing_channel_secrets({"type": "email" if ch == "email" else "post", "channel": ch,
+                                        "action": "op deliver 0000"})[1]
+
+
+def _item_line(meta):
+    kind = {"post": "포스트", "email": "이메일", "research": "리서치", "site": "사이트", "other": "기타"}.get(meta.get("type"), meta.get("type", "?"))
+    where = CHANNEL_KO.get((meta.get("channel") or "").lower()) or meta.get("to") or ""
+    return f"{kind}{' · ' + where if where else ''}  \"{meta.get('title', '')}\""
+
+
+def _preview(body, n=4):
+    lines = [l for l in body.strip().splitlines() if l.strip()]
+    for l in lines[:n]:
+        print(f"      {l[:100]}")
+    if len(lines) > n:
+        print(f"      … ({len(lines) - n}줄 더, v 로 전체 보기)")
+
+
+def _print_sent(res):
+    if res.get("sent") is not None:
+        code, msg = res["sent"]
+        print(f"  {'✓ 보냄' if code == 0 else '✗ 보내기 실패'} ({msg})")
+
+
+def home_items(od):
+    """확인할 것 목록. [{"kind": pending|retry|stage, ...}]"""
+    out = [{"kind": "pending", **it} for it in queue_items(od, ("pending",))]
+    if send_mode_of(od) == "human":
+        out += [{"kind": "retry", **it} for it in queue_items(od, ("approved",)) if (it["meta"].get("action") or "").strip()]
+    ov = stage_overview(od)
+    if ov.get("stage") and ov.get("ready") and ov.get("next"):
+        out.append({"kind": "stage", "from": ov["stage"], "to": ov["next"], "checks": ov["checks"]})
+    return out, ov
+
+
+def cmd_home(args):
+    od = op_dir(required=False)
+    if not od:
+        print("이 폴더는 아직 jangin 프로젝트가 아니다.")
+        print("에이전트(Claude 등)에게 하고 싶은 일을 말하면 알아서 시작한다. 직접 시작하려면 `op init`.")
+        return
+    items, ov = home_items(od)
+    head = f"📍 {os.path.basename(os.path.dirname(od))}"
+    if ov.get("stage"):
+        head += f" · {STAGE_KO[ov['stage']]} 단계"
+        if ov["stage"] == "build":
+            ms = load_milestones(od)
+            head += f" (마일스톤 {len([m for m in ms if m.get('done')])}/{len(ms)} 통과)"
+    print(head)
+    if not items:
+        print("✓ 지금 확인할 것이 없다.")
+        if ov.get("stage"):
+            left = [c[0] for c in ov["checks"] if not c[1]]
+            if left:
+                print(f"  다음 단계로 가기 전에 남은 것: {', '.join(left)}")
+        return
+    print(f"✋ 확인할 것 {len(items)}건")
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        for i, it in enumerate(items, 1):
+            if it["kind"] == "stage":
+                print(f"  [{i}] 다음 단계로: {STAGE_KO[it['from']]} → {STAGE_KO[it['to']]}")
+            else:
+                print(f"  [{i}] {it['id']} {'(보내기 실패, 다시 보내기) ' if it['kind'] == 'retry' else ''}{_item_line(it['meta'])}")
+        print(f"결정은 사람이 {human_hint(od, 'op', '/inbox')} 에서 한다.")
+        return
+    auth = terminal_authority(od, "승인/거절")
+    tally = {"승인": 0, "거절": 0, "나중에": 0}
+    for i, it in enumerate(items, 1):
+        print()
+        if it["kind"] == "stage":
+            print(f"  [{i}/{len(items)}] 다음 단계로: {STAGE_KO[it['from']]} → {STAGE_KO[it['to']]} ({STAGES[it['to']]['goal']})")
+            for c in it["checks"]:
+                print(f"      ✓ {c[0]}" + (f": {c[2]}" if len(c) > 2 and c[2] else ""))
+            if it["from"] == "build":
+                for m in load_milestones(od):
+                    print(f"      마일스톤 {m['n']}. {m['title']}  ← 검사: {m.get('test')}")
+            prompt = "  a 넘기기 · s 아직 · q 끝 > "
+        else:
+            meta = it["meta"]
+            tag = " (보내기 실패한 항목)" if it["kind"] == "retry" else ""
+            print(f"  [{i}/{len(items)}] {it['id']} {_item_line(meta)}{tag}")
+            _preview(it["body"])
+            if (meta.get("action") or "").strip() and send_mode_of(od) == "human":
+                ch = ticket_channel(meta)
+                if ch and re.fullmatch(r"op(?:\.py)?\s+deliver\s+\d{4}", meta["action"].strip()):
+                    print(f"      승인하면 {CHANNEL_KO.get(ch, ch)}(으)로 바로 보낸다.")
+                else:
+                    print(f"      승인하면 실행: {meta['action']}")
+            prompt = ("  a 다시 보내기 · v 전체 보기 · s 나중에 · q 끝 > " if it["kind"] == "retry"
+                      else "  a 승인 · r 거절 · v 전체 보기 · s 나중에 · q 끝 > ")
+        while True:
+            ans = _ask(prompt, "s")
+            ans = "q" if ans is None else ans.lower()
+            if ans == "q":
+                tally["나중에"] += len(items) - i + 1
+                return _home_summary(tally)
+            if ans == "s":
+                tally["나중에"] += 1
+                break
+            if ans == "v" and it["kind"] != "stage":
+                print(it["body"])
+                continue
+            if ans == "a" and it["kind"] == "stage":
+                try:
+                    res = stage_move(od, "advance", auth)
+                except StageBlocked as e:
+                    print(f"  넘어가지 못했다: {e.msg}")
+                    print_checks(e.checks)
+                    tally["나중에"] += 1
+                    break
+                print(f"  ✓ {STAGE_KO[res['from']]} → {STAGE_KO[res['to']]}. 에이전트에게 다음 단계를 시작하자고 말하면 된다.")
+                tally["승인"] += 1
+                break
+            if ans == "a" and it["kind"] == "retry":
+                code, msg = run_action(od, it["id"], secrets_env=channel_env(names=ticket_secret_names(it["meta"])))
+                print(f"  {'✓ 보냄' if code == 0 else '✗ 또 실패'} ({msg})")
+                tally["승인" if code == 0 else "나중에"] += 1
+                break
+            if ans == "a":
+                ch, missing = missing_channel_secrets(it["meta"])
+                if missing and send_mode_of(od) == "human" and not connect_channel(ch, missing, auth):
+                    print("  연결하지 않아서 그대로 둔다. 다음에 `op` 에서 다시 고를 수 있다.")
+                    tally["나중에"] += 1
+                    break
+                res = pending_decide(od, it["id"], "approve", auth)
+                print("  ✓ 승인")
+                _print_sent(res)
+                if res["meta"]["status"] == "approved" and res.get("sent") is None:
+                    print("  " + ("에이전트가 `op send " + it["id"] + "` 로 보낸다." if (res["meta"].get("action") or "").strip()
+                                  else "실행할 명령(action)이 없는 항목이라 기록만 남는다."))
+                tally["승인"] += 1
+                break
+            if ans == "r" and it["kind"] == "pending":
+                reason = _ask("  거절 이유 (다음 초안에 반영된다) > ", "")
+                if reason is None:
+                    tally["나중에"] += len(items) - i + 1
+                    return _home_summary(tally)
+                pending_decide(od, it["id"], "reject", auth, note=reason or "이유 없음")
+                print("  ✗ 거절")
+                tally["거절"] += 1
+                break
+            print("  보기에 있는 글자 하나를 입력한다.")
+    _home_summary(tally)
+
+
+def _home_summary(tally):
+    print()
+    print("끝. " + " · ".join(f"{k} {v}" for k, v in tally.items() if v) if any(tally.values()) else "끝.")
+
+
 COMMANDS = {
     "init": cmd_init, "status": cmd_status, "pass": cmd_pass, "verify": cmd_verify,
     "pending": cmd_pending, "send": cmd_send, "guard": cmd_guard, "llm": cmd_llm,
     "deliver": cmd_deliver, "serve": cmd_serve, "notify": cmd_notify, "feedback": cmd_feedback,
     "stage": cmd_stage, "milestone": cmd_milestone, "metric": cmd_metric, "secret": cmd_secret,
-    "telegram": cmd_telegram, "connect": cmd_connect,
+    "telegram": cmd_telegram, "connect": cmd_connect, "home": cmd_home,
 }
 
 
 def main():
-    if len(sys.argv) < 2 or sys.argv[1] in ("help", "-h", "--help"):
+    if len(sys.argv) < 2:
+        sys.argv.append("home")
+    if sys.argv[1] in ("help", "-h", "--help"):
         print(__doc__)
-        print("""명령:
+        print("""사람이 쓰는 것은 하나:
+  op                                     확인할 것(승인 대기, 다음 단계로 넘기기)을 하나씩 보고 그 자리에서 정한다
+
+명령 (대부분 에이전트가 쓴다):
   init [--stage 단계] [--send human|agent]   .operator/ 작업 공간 생성 (새 프로젝트는 발견 단계, 사람이 발송)
   status                                 현재 상태 요약
   stage [show] | doc | check | history   지금 단계, 할 일, 넘어가기 조건

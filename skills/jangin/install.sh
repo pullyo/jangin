@@ -6,16 +6,18 @@
 #   sh install.sh --project DIR        # 프로젝트 레벨: DIR/.agents/skills/jangin (+ 도구별 프로젝트 폴더)
 #   sh install.sh --targets claude,codex
 #   sh install.sh --print-hooks        # 훅 설정 스니펫을 실제 경로로 채워 출력 (설정 파일은 직접 수정하지 않는다)
+#   sh install.sh --with-hooks         # 한 번에: 스킬 링크 + Claude Code 훅을 settings.json 에 합침 + op 명령을 ~/.local/bin 에
 set -eu
 HERE=$(cd "$(dirname "$0")" && pwd)
-MODE=link; TARGETS=""; PROJECT=""; PRINT_HOOKS=0
+MODE=link; TARGETS=""; PROJECT=""; PRINT_HOOKS=0; WITH_HOOKS=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --copy) MODE=copy ;;
     --targets) TARGETS="$2"; shift ;;
     --project) PROJECT="$2"; shift ;;
     --print-hooks) PRINT_HOOKS=1 ;;
-    -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
+    --with-hooks) WITH_HOOKS=1 ;;
+    -h|--help) sed -n '2,11p' "$0"; exit 0 ;;
     *) echo "모르는 옵션: $1" >&2; exit 1 ;;
   esac
   shift
@@ -61,8 +63,55 @@ else
   done
 fi
 
+merge_claude_hook() { # merge_claude_hook <settings.json>  — 있던 설정은 그대로 두고 jangin 훅만 더한다 (.bak 백업)
+  python3 -I - "$1" "$HERE" <<'PY'
+import json, os, shutil, sys
+path, here = sys.argv[1], sys.argv[2]
+op = os.path.join(here, "scripts", "op.py")
+cmd = f'[ -f "{op}" ] || exit 0; exec python3 -I "{op}" guard --format claude'
+data = {}
+if os.path.exists(path):
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
+    try:
+        data = json.loads(text) if text.strip() else {}
+    except ValueError:
+        sys.exit(f"  ! {path} 가 올바른 JSON 이 아니라 건드리지 않았다. --print-hooks 로 직접 붙여라.")
+pre = data.setdefault("hooks", {}).setdefault("PreToolUse", [])
+if any("guard --format claude" in h.get("command", "") and "op.py" in h.get("command", "")
+       for e in pre for h in e.get("hooks", [])):
+    print(f"  = {path} (jangin 훅이 이미 있다)")
+    sys.exit(0)
+if os.path.exists(path):
+    shutil.copy2(path, path + ".bak")
+pre.append({"matcher": "Bash|Write|Edit|MultiEdit|NotebookEdit|Read", "hooks": [{"type": "command", "command": cmd}]})
+os.makedirs(os.path.dirname(path), exist_ok=True)
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
+    f.write("\n")
+print(f"  + {path} 에 jangin 훅 추가" + (" (이전 설정은 .bak)" if os.path.exists(path + ".bak") else ""))
+PY
+}
+
+if [ "$WITH_HOOKS" = 1 ]; then
+  echo
+  echo "훅 연결 (Claude Code):"
+  if [ -n "$PROJECT" ]; then merge_claude_hook "$P/.claude/settings.json"
+  elif [ -d "$HOME/.claude" ]; then merge_claude_hook "$HOME/.claude/settings.json"
+  else echo "  i ~/.claude 가 없어 건너뜀. 다른 도구는 --print-hooks 로 나오는 설정을 붙인다."; fi
+  BIN="$HOME/.local/bin"
+  mkdir -p "$BIN"
+  if [ -e "$BIN/op" ] || [ -L "$BIN/op" ]; then
+    [ "$(readlink "$BIN/op")" = "$HERE/scripts/op" ] && echo "  = $BIN/op (이미 링크됨)" || echo "  ! $BIN/op 가 이미 있다. 건너뜀"
+  else ln -s "$HERE/scripts/op" "$BIN/op"; echo "  + $BIN/op -> $HERE/scripts/op"; fi
+  case ":$PATH:" in *":$BIN:"*) ;; *) echo "  i $BIN 이 PATH 에 없다. ~/.zshrc 에 추가:  export PATH=\"\$HOME/.local/bin:\$PATH\"" ;; esac
+  echo
+  echo "끝. 프로젝트 폴더에서 에이전트에게 하고 싶은 일을 말하고, 확인할 것이 생기면 터미널에서 op 를 친다."
+  [ "$PRINT_HOOKS" = 1 ] || exit 0
+fi
+
 echo
-echo "다음: 승인 게이트를 100% 로 만들려면 훅을 건다.  sh \"$HERE/install.sh\" --print-hooks"
+echo "다음: 승인 게이트를 100% 로 만들려면 훅을 건다.  sh \"$HERE/install.sh\" --with-hooks  (다른 도구: --print-hooks)"
 [ "$PRINT_HOOKS" = 1 ] || exit 0
 
 echo
